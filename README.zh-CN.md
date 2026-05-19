@@ -6,6 +6,8 @@ Browser Group Env 是一个 Chrome 扩展，用于把开发环境规则绑定到
 
 它适合需要同时处理多个任务、分支或预览环境的开发场景：你可以继续使用同一个 Chrome Profile 和登录态，同时用标签组隔离不同环境的请求规则。
 
+![Browser Group Env](./docs/assets/marquee-promo-1400x560.jpg)
+
 ## 功能
 
 - 创建和编辑环境配置。
@@ -37,6 +39,15 @@ Browser Group Env 当前支持两类规则：
 - 查询参数：参数已存在时替换，参数不存在时新增。
 
 规则会以 Chrome Declarative Net Request session rules 的形式安装，并同时受标签组绑定、全局启用状态、环境状态和过滤条件限制。
+
+## 使用 Release 包
+
+1. 从 GitHub Releases 下载 `browser-group-env-<version>-chrome.zip`。
+2. 将 zip 解压到本地目录。
+3. 打开 `chrome://extensions`。
+4. 开启开发者模式。
+5. 点击“加载已解压的扩展程序”。
+6. 选择解压后的目录。
 
 ## 本地开发
 

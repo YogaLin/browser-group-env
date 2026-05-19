@@ -6,6 +6,8 @@ Browser Group Env is a Chrome extension for binding development environment rule
 
 It helps developers keep multiple tasks, branches, or preview environments separated while still using the same Chrome profile and login state.
 
+![Browser Group Env](./docs/assets/marquee-promo-1400x560.jpg)
+
 ## Features
 
 - Create and edit environment configurations.
@@ -37,6 +39,15 @@ Browser Group Env currently supports two rule types:
 - Query parameters: replace a query parameter when it exists, or add it when it is missing.
 
 Rules are installed as Chrome Declarative Net Request session rules and are limited by tab group binding, global enablement, environment state, and filters.
+
+## Use The Release Package
+
+1. Download `browser-group-env-<version>-chrome.zip` from GitHub Releases.
+2. Unzip it to a local folder.
+3. Open `chrome://extensions`.
+4. Enable Developer mode.
+5. Click "Load unpacked".
+6. Select the unzipped folder.
 
 ## Development
 
