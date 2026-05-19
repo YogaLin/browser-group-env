@@ -1,0 +1,31 @@
+import { defineConfig } from "wxt";
+
+export default defineConfig({
+  modules: ["@wxt-dev/module-react"],
+  outDir: "output",
+  manifest: {
+    name: "Browser Group Env",
+    description: "Bind Chrome Tab Groups to development environment rules.",
+    permissions: ["tabs", "tabGroups", "storage", "declarativeNetRequest", "scripting"],
+    host_permissions: ["<all_urls>"],
+    icons: {
+      "16": "icon/16.png",
+      "32": "icon/32.png",
+      "48": "icon/48.png",
+      "128": "icon/128.png"
+    },
+    action: {
+      default_title: "Browser Group Env",
+      default_icon: {
+        "16": "icon/16.png",
+        "32": "icon/32.png",
+        "48": "icon/48.png",
+        "128": "icon/128.png"
+      }
+    },
+    options_ui: {
+      page: "options.html",
+      open_in_tab: true
+    }
+  }
+});
