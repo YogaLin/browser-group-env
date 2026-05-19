@@ -364,6 +364,93 @@ export function sanitizeState(state: GlobalState): GlobalState {
   };
 }
 
+export function reconcileGroupBindings(
+  state: GlobalState,
+  availableGroups: AvailableTabGroup[],
+  now = Date.now()
+): GlobalState {
+  if (!availableGroups.length || !Object.keys(state.groupBindings).length) {
+    return state;
+  }
+
+  const availableByKey = new Map(availableGroups.map((group) => [group.groupKey, group]));
+  const bindings = Object.entries(state.groupBindings);
+  const plannedKeys = new Map<string, string>();
+
+  for (const [groupKey, binding] of bindings) {
+    const target = findRestoredGroup(binding, availableGroups, availableByKey);
+    if (target && !state.groupBindings[target.groupKey]) {
+      plannedKeys.set(groupKey, target.groupKey);
+    }
+  }
+
+  let changed = false;
+  let nextEnvs = state.envs;
+  const nextBindings: Record<string, GroupBinding> = {};
+
+  for (const [groupKey, binding] of bindings) {
+    const restoredGroupKey = plannedKeys.get(groupKey);
+    const restoredGroup = restoredGroupKey ? availableByKey.get(restoredGroupKey) : undefined;
+    const currentGroup = availableByKey.get(groupKey);
+    const freshGroup =
+      currentGroup && (!binding.title || normalizeTitle(currentGroup.title) === normalizeTitle(binding.title))
+        ? currentGroup
+        : undefined;
+    const nextGroup = restoredGroup ?? freshGroup;
+
+    if (nextGroup) {
+      const nextBinding: GroupBinding = {
+        ...binding,
+        groupKey: nextGroup.groupKey,
+        chromeGroupId: nextGroup.groupId,
+        windowId: nextGroup.windowId,
+        title: nextGroup.title,
+        color: nextGroup.color,
+        unresolved: false,
+        updatedAt:
+          nextGroup.groupKey !== binding.groupKey || binding.unresolved ? now : binding.updatedAt
+      };
+      nextBindings[nextGroup.groupKey] = nextBinding;
+
+      if (nextGroup.groupKey !== groupKey) {
+        nextEnvs = replaceEnvLinkedGroupKey(nextEnvs, binding.envId, groupKey, nextGroup.groupKey, now);
+        changed = true;
+      }
+      if (
+        nextBinding.chromeGroupId !== binding.chromeGroupId ||
+        nextBinding.windowId !== binding.windowId ||
+        nextBinding.title !== binding.title ||
+        nextBinding.color !== binding.color ||
+        nextBinding.unresolved !== binding.unresolved ||
+        nextBinding.updatedAt !== binding.updatedAt
+      ) {
+        changed = true;
+      }
+      continue;
+    }
+
+    const nextBinding = {
+      ...binding,
+      unresolved: true,
+      updatedAt: binding.unresolved ? binding.updatedAt : now
+    };
+    nextBindings[groupKey] = nextBinding;
+    if (!binding.unresolved) {
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return state;
+  }
+
+  return {
+    ...state,
+    envs: nextEnvs,
+    groupBindings: nextBindings
+  };
+}
+
 export function summarizeRules(env: Env): string {
   const headers = env.rules.headers.filter((rule) => rule.enabled && rule.name).length;
   const queries = env.rules.queries.filter((rule) => rule.enabled && rule.key).length;
@@ -397,6 +484,50 @@ function sanitizeTemplateValueSource(
     selector,
     ...(attribute ? { attribute } : {})
   };
+}
+
+function findRestoredGroup(
+  binding: GroupBinding,
+  availableGroups: AvailableTabGroup[],
+  availableByKey: Map<string, AvailableTabGroup>
+): AvailableTabGroup | undefined {
+  const title = normalizeTitle(binding.title);
+  if (!title) {
+    return undefined;
+  }
+  const currentGroup = availableByKey.get(binding.groupKey);
+  if (currentGroup && normalizeTitle(currentGroup.title) === title) {
+    return undefined;
+  }
+  const candidates = availableGroups.filter((group) => normalizeTitle(group.title) === title);
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function replaceEnvLinkedGroupKey(
+  envs: Record<string, Env>,
+  envId: string,
+  oldGroupKey: string,
+  newGroupKey: string,
+  now: number
+): Record<string, Env> {
+  const env = envs[envId];
+  if (!env) {
+    return envs;
+  }
+  return {
+    ...envs,
+    [envId]: {
+      ...env,
+      linkedGroupKeys: Array.from(
+        new Set(env.linkedGroupKeys.map((groupKey) => (groupKey === oldGroupKey ? newGroupKey : groupKey)))
+      ),
+      updatedAt: now
+    }
+  };
+}
+
+function normalizeTitle(title?: string): string {
+  return title?.trim().toLowerCase() ?? "";
 }
 
 function parseCssSelectorSource(input: string): { selector: string; attribute?: string } {

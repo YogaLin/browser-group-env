@@ -35,6 +35,7 @@ import {
   formatTemplateValueSourceInput,
   isEnvEmptyForTemplate,
   parseTemplateValueSourceInput,
+  reconcileGroupBindings,
   sanitizeEnv,
   sanitizeEnvTemplate,
   type ActiveContext,
@@ -334,16 +335,17 @@ export function PopupApp({
 
   const reload = useCallback(async () => {
     const [nextState, nextContext] = await Promise.all([loadState(), getActiveContext()]);
+    const reconciledState = reconcileGroupBindings(nextState, nextContext.availableGroups ?? []);
     const autoSelectedId = nextContext.groupKey
-      ? nextState.groupBindings[nextContext.groupKey]?.envId
+      ? reconciledState.groupBindings[nextContext.groupKey]?.envId
       : undefined;
     const selectedEnvId =
-      nextState.autoSwitch && autoSelectedId ? autoSelectedId : nextState.selectedEnvId;
+      reconciledState.autoSwitch && autoSelectedId ? autoSelectedId : reconciledState.selectedEnvId;
 
     const syncedState =
-      selectedEnvId && selectedEnvId !== nextState.selectedEnvId
-        ? { ...nextState, selectedEnvId }
-        : nextState;
+      selectedEnvId && selectedEnvId !== reconciledState.selectedEnvId
+        ? { ...reconciledState, selectedEnvId }
+        : reconciledState;
 
     if (syncedState !== nextState) {
       await saveState(syncedState);

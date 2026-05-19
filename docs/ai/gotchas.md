@@ -16,6 +16,8 @@ HeaderRule 和 QueryRule 在数据结构中保留 `enabled` 字段以兼容 DNR 
 
 不要把 Chrome `tabGroupId` 当成长期稳定 ID。浏览器重启后需要通过标题、颜色、URL 等信息恢复绑定；无法唯一恢复时应提示用户重新绑定。
 
+当前实现会在 Popup 加载和 Background 刷新规则时，用可用标签组列表校正已保存的 binding：如果旧 `groupKey` 已失效，或旧 `groupKey` 现在对应的标签组标题与保存标题不一致，会优先按唯一同名标签组迁移绑定；同名不唯一或找不到时保持 `unresolved`，避免把 Env 误绑定到错误标签组。
+
 ## Auto Switch 不等于规则生效条件
 
 Auto Switch 只控制 Popup 当前选中的 Env 是否跟随 active tab group。Header 规则生效应由 Env 绑定、启用状态和过滤器决定，不应依赖 Popup 当前选中项。

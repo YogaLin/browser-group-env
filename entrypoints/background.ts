@@ -2,6 +2,7 @@ import { updateActionIcon } from "../src/extension/action-icon";
 import { getActiveContext, resolveTabsByGroup } from "../src/extension/chrome-api";
 import { loadState, saveState } from "../src/extension/storage";
 import { compileSessionRules } from "../src/model/dnr";
+import { reconcileGroupBindings } from "../src/model/env";
 
 let refreshing = false;
 
@@ -51,11 +52,10 @@ async function refreshSessionRules() {
   refreshing = true;
   try {
     const state = await loadState();
-    const [context, tabsByGroup] = await Promise.all([
-      getActiveContext(),
-      resolveTabsByGroup(state.groupBindings)
-    ]);
-    const rules = compileSessionRules(state, tabsByGroup);
+    const context = await getActiveContext();
+    const reconciledState = reconcileGroupBindings(state, context.availableGroups ?? []);
+    const tabsByGroup = await resolveTabsByGroup(reconciledState.groupBindings);
+    const rules = compileSessionRules(reconciledState, tabsByGroup);
     const oldRuleIds = state.ruleMeta.activeRuleIds;
     const newRuleIds = rules.map((rule) => rule.id);
 
@@ -64,10 +64,10 @@ async function refreshSessionRules() {
       addRules: rules
     });
 
-    await updateActionIcon(state, context);
+    await updateActionIcon(reconciledState, context);
 
     await saveState({
-      ...state,
+      ...reconciledState,
       ruleMeta: {
         activeRuleIds: newRuleIds,
         lastCompiledAt: Date.now()

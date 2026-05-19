@@ -10,6 +10,7 @@ import {
   formatTemplateValueSourceInput,
   isEnvEmptyForTemplate,
   parseTemplateValueSourceInput,
+  reconcileGroupBindings,
   sanitizeEnv,
   sanitizeEnvTemplate,
   sanitizeState
@@ -201,5 +202,93 @@ describe("env helpers", () => {
     expect(copy.linkedGroupKeys).toEqual([]);
     expect(copy.filters).toEqual(env.filters);
     expect(copy.rules).toEqual(env.rules);
+  });
+
+  it("restores a stale group binding by a unique matching title", () => {
+    const env = {
+      ...createEnv({ name: "Preview", now: 1 }),
+      linkedGroupKeys: ["chrome:1:2"]
+    };
+    const state = {
+      ...createEmptyState(1),
+      selectedEnvId: env.id,
+      envs: { [env.id]: env },
+      groupBindings: {
+        "chrome:1:2": {
+          groupKey: "chrome:1:2",
+          envId: env.id,
+          chromeGroupId: 2,
+          windowId: 1,
+          title: "Preview",
+          color: "blue",
+          lastSeenTabUrls: [],
+          updatedAt: 1
+        }
+      }
+    };
+
+    const next = reconcileGroupBindings(
+      state,
+      [
+        { groupKey: "chrome:1:2", groupId: 2, windowId: 1, title: "Other", color: "red" },
+        { groupKey: "chrome:1:9", groupId: 9, windowId: 1, title: "Preview", color: "green" }
+      ],
+      2
+    );
+
+    expect(next.groupBindings["chrome:1:2"]).toBeUndefined();
+    expect(next.groupBindings["chrome:1:9"]).toMatchObject({
+      groupKey: "chrome:1:9",
+      envId: env.id,
+      chromeGroupId: 9,
+      windowId: 1,
+      title: "Preview",
+      color: "green",
+      unresolved: false,
+      updatedAt: 2
+    });
+    expect(next.envs[env.id].linkedGroupKeys).toEqual(["chrome:1:9"]);
+  });
+
+  it("keeps a stale group binding unresolved when title matching is ambiguous", () => {
+    const env = {
+      ...createEnv({ name: "Preview", now: 1 }),
+      linkedGroupKeys: ["chrome:1:2"]
+    };
+    const state = {
+      ...createEmptyState(1),
+      selectedEnvId: env.id,
+      envs: { [env.id]: env },
+      groupBindings: {
+        "chrome:1:2": {
+          groupKey: "chrome:1:2",
+          envId: env.id,
+          chromeGroupId: 2,
+          windowId: 1,
+          title: "Preview",
+          color: "blue",
+          lastSeenTabUrls: [],
+          updatedAt: 1
+        }
+      }
+    };
+
+    const next = reconcileGroupBindings(
+      state,
+      [
+        { groupKey: "chrome:1:8", groupId: 8, windowId: 1, title: "Preview", color: "red" },
+        { groupKey: "chrome:1:9", groupId: 9, windowId: 1, title: "Preview", color: "green" }
+      ],
+      2
+    );
+
+    expect(next.groupBindings["chrome:1:2"]).toMatchObject({
+      groupKey: "chrome:1:2",
+      envId: env.id,
+      chromeGroupId: 2,
+      unresolved: true,
+      updatedAt: 2
+    });
+    expect(next.envs[env.id].linkedGroupKeys).toEqual(["chrome:1:2"]);
   });
 });
