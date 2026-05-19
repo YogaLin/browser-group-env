@@ -11,11 +11,32 @@ It helps developers keep multiple tasks, branches, or preview environments separ
 - Create and edit environment configurations.
 - Bind an environment to one or more Chrome Tab Groups.
 - Mark an environment as always on, independent of Tab Groups.
-- Add request headers with domain/path/excluded-domain filters.
+- Scope rules with explicit filters before they can affect requests.
+- Add request headers through Chrome Declarative Net Request rules.
 - Replace query parameters through Chrome Declarative Net Request rules.
 - Manage reusable configuration templates.
 - Resolve template header values from the current page with XPath or CSS selectors.
 - Show active, paused, matched, and unmatched states in the popup and toolbar icon.
+
+## Supported Filters
+
+Filters define where an environment is allowed to take effect.
+
+- Domains: exact domains such as `app.example.com`.
+- Wildcard subdomains: patterns such as `*.example.com`.
+- Paths: optional path patterns such as `/commerce/*` or `/api/*`.
+- Excluded domains: domains that must never be matched even if they also match the domain list.
+
+An environment without a domain filter is not allowed to inject rules. This keeps headers and query rewrites from leaking to unrelated websites.
+
+## Supported Rules
+
+Browser Group Env currently supports two rule types:
+
+- Request headers: add or replace request headers for matched requests.
+- Query parameters: replace a query parameter when it exists, or add it when it is missing.
+
+Rules are installed as Chrome Declarative Net Request session rules and are limited by tab group binding, global enablement, environment state, and filters.
 
 ## Development
 
@@ -31,6 +52,16 @@ npm run build
 ```
 
 The build output is written to `output/chrome-mv3`.
+
+## Release Zip
+
+For GitHub Releases, publish the generated zip file instead of asking users to clone and build the project.
+
+```bash
+npm run release
+```
+
+The release package is written to `output/browser-group-env-<version>-chrome.zip`.
 
 ## Testing
 

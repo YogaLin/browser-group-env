@@ -15,9 +15,10 @@
     "dev": "wxt",
     "dev:ui": "vite --host 127.0.0.1 --port 3000",
     "build": "wxt build",
+    "zip": "wxt zip",
+    "release": "npm run zip",
     "typecheck": "wxt prepare && tsc --noEmit",
-    "test": "vitest run",
-    "preview": "wxt zip"
+    "test": "vitest run"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.4",
