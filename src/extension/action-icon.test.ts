@@ -21,6 +21,7 @@ describe("action icon helpers", () => {
       selectedEnvId: env.id,
       envs: { [env.id]: env },
       templates: {},
+      globalWorkspace: { items: [] },
       groupBindings: {
         [groupKey]: {
           groupKey,
@@ -46,6 +47,7 @@ describe("action icon helpers", () => {
       selectedEnvId: env.id,
       envs: { [env.id]: env },
       templates: {},
+      globalWorkspace: { items: [] },
       groupBindings: {},
       ruleMeta: { activeRuleIds: [] }
     };
@@ -67,6 +69,7 @@ describe("action icon helpers", () => {
       selectedEnvId: env.id,
       envs: { [env.id]: env },
       templates: {},
+      globalWorkspace: { items: [] },
       groupBindings: {
         [boundGroupKey]: {
           groupKey: boundGroupKey,
@@ -98,6 +101,7 @@ describe("action icon helpers", () => {
       selectedEnvId: env.id,
       envs: { [env.id]: env },
       templates: {},
+      globalWorkspace: { items: [] },
       groupBindings: {},
       ruleMeta: { activeRuleIds: [] }
     };

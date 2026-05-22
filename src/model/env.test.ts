@@ -6,12 +6,16 @@ import {
   createEnvTemplate,
   createHeaderRule,
   createQueryRule,
+  createWorkspaceItem,
+  createWorkspaceTodo,
   duplicateEnv,
   formatTemplateValueSourceInput,
   isEnvEmptyForTemplate,
+  mergeRuleRefreshState,
   parseTemplateValueSourceInput,
   reconcileGroupBindings,
   sanitizeEnv,
+  sanitizeGlobalWorkspace,
   sanitizeEnvTemplate,
   sanitizeState
 } from "./env";
@@ -23,6 +27,7 @@ describe("env helpers", () => {
     expect(state.selectedEnvId).toBeUndefined();
     expect(state.envs).toEqual({});
     expect(state.templates).toEqual({});
+    expect(state.globalWorkspace).toEqual({ items: [] });
   });
 
   it("creates env without default domain filter", () => {
@@ -31,6 +36,7 @@ describe("env helpers", () => {
     expect(env.scope).toBe("group");
     expect(env.filters.domains).toEqual([]);
     expect(env.rules.headers).toEqual([]);
+    expect(env.workspace).toEqual({ items: [], todos: [], notes: "" });
   });
 
   it("creates env without hostname as disabled and without filters", () => {
@@ -75,6 +81,30 @@ describe("env helpers", () => {
     expect(createQueryRule()).toMatchObject({ enabled: true, key: "", value: "" });
   });
 
+  it("creates workspace items and todos with stable defaults", () => {
+    expect(createWorkspaceItem({ type: "text", now: 1 })).toMatchObject({
+      type: "text",
+      title: "",
+      value: "",
+      createdAt: 1,
+      updatedAt: 1
+    });
+    expect(createWorkspaceItem({ type: "link", now: 1 })).toMatchObject({
+      type: "link",
+      title: ""
+    });
+    expect(createWorkspaceItem({ type: "command", now: 1 })).toMatchObject({
+      type: "command",
+      title: ""
+    });
+    expect(createWorkspaceTodo({ now: 1 })).toMatchObject({
+      title: "",
+      done: false,
+      createdAt: 1,
+      updatedAt: 1
+    });
+  });
+
   it("migrates old states without templates", () => {
     const oldState = {
       enabled: true,
@@ -85,6 +115,150 @@ describe("env helpers", () => {
     };
     const next = sanitizeState(oldState as unknown as ReturnType<typeof createEmptyState>);
     expect(next.templates).toEqual({});
+    expect(next.globalWorkspace).toEqual({ items: [] });
+  });
+
+  it("sanitizes global workspace snippets without touching env workspaces", () => {
+    const env = {
+      ...createEnv({ name: "Preview", now: 1 }),
+      workspace: {
+        items: [createWorkspaceItem({ type: "text", now: 1 })],
+        todos: [],
+        notes: ""
+      }
+    };
+    const state = {
+      ...createEmptyState(1),
+      envs: { [env.id]: env },
+      globalWorkspace: {
+        items: [
+          {
+            id: "global-1",
+            type: "unknown" as never,
+          title: "",
+            value: " https://example.com ",
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }
+    };
+
+    const sanitized = sanitizeState(state);
+
+    expect(sanitized.globalWorkspace).toEqual({
+      items: [
+        {
+          id: "global-1",
+          type: "text",
+          title: "",
+          value: "https://example.com",
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    });
+    expect(sanitized.envs[env.id].workspace.items).toHaveLength(1);
+    expect(sanitizeGlobalWorkspace(state.globalWorkspace)).toEqual(sanitized.globalWorkspace);
+  });
+
+  it("migrates old envs without workspace", () => {
+    const env = createEnv({ name: "Preview", now: 1 });
+    const { workspace: _workspace, ...oldEnv } = env;
+    const sanitized = sanitizeEnv(oldEnv as typeof env);
+    expect(sanitized.workspace).toEqual({ items: [], todos: [], notes: "" });
+  });
+
+  it("sanitizes env workspace without affecting rules", () => {
+    const env = createEnv({ name: "Preview", now: 1 });
+    const sanitized = sanitizeEnv({
+      ...env,
+      enabled: true,
+      filters: { domains: ["example.com"], paths: [], excludedDomains: [] },
+      rules: {
+        headers: [createHeaderRule({ name: "x-preview", value: "1" })],
+        queries: [createQueryRule()]
+      },
+      workspace: {
+        items: [
+          {
+            id: "i1",
+            type: "text",
+            title: " branch ",
+            value: " feat/demo ",
+            createdAt: 1,
+            updatedAt: 1
+          },
+          {
+            id: "i2",
+            type: "unknown" as never,
+            title: "",
+            value: "https://example.com",
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ],
+        todos: [
+          { id: "t1", title: " verify header ", done: true, createdAt: 1, updatedAt: 1 },
+          { id: "t2", title: "", done: false, createdAt: 1, updatedAt: 1 }
+        ],
+        notes: "  remember this env  "
+      }
+    });
+
+    expect(sanitized.rules.headers).toHaveLength(1);
+    expect(sanitized.workspace).toEqual({
+      items: [
+        {
+          id: "i1",
+          type: "text",
+          title: "branch",
+          value: "feat/demo",
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: "i2",
+          type: "text",
+          title: "",
+          value: "https://example.com",
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      todos: [
+        { id: "t1", title: "verify header", done: true, createdAt: 1, updatedAt: 1 },
+        { id: "t2", title: "", done: false, createdAt: 1, updatedAt: 1 }
+      ],
+      notes: "remember this env"
+    });
+  });
+
+  it("keeps latest workspace data when saving background rule refresh results", () => {
+    const env = createEnv({ name: "Preview", now: 1 });
+    const refreshedState = {
+      ...createEmptyState(1),
+      envs: { [env.id]: env },
+      selectedEnvId: env.id
+    };
+    const todo = createWorkspaceTodo({ now: 2 });
+    const latestState = {
+      ...refreshedState,
+      envs: {
+        [env.id]: {
+          ...env,
+          workspace: { items: [], todos: [todo], notes: "" }
+        }
+      }
+    };
+
+    const merged = mergeRuleRefreshState(latestState, refreshedState, {
+      activeRuleIds: [10000],
+      lastCompiledAt: 3
+    });
+
+    expect(merged.envs[env.id].workspace.todos).toEqual([todo]);
+    expect(merged.ruleMeta).toEqual({ activeRuleIds: [10000], lastCompiledAt: 3 });
   });
 
   it("applies a template as ordinary env filters and header rules", () => {

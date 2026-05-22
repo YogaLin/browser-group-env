@@ -9,6 +9,7 @@ export type GlobalState = {
   selectedEnvId?: string;
   envs: Record<string, Env>;
   templates: Record<string, EnvTemplate>;
+  globalWorkspace: GlobalWorkspace;
   groupBindings: Record<string, GroupBinding>;
   ruleMeta: RuleMeta;
 };
@@ -21,6 +22,7 @@ export type Env = {
   linkedGroupKeys: string[];
   filters: EnvFilters;
   rules: EnvRules;
+  workspace: EnvWorkspace;
   createdAt: number;
   updatedAt: number;
 };
@@ -48,6 +50,35 @@ export type EnvFilters = {
 export type EnvRules = {
   headers: HeaderRule[];
   queries: QueryRule[];
+};
+
+export type EnvWorkspace = {
+  items: WorkspaceItem[];
+  todos: WorkspaceTodo[];
+  notes: string;
+};
+
+export type GlobalWorkspace = {
+  items: WorkspaceItem[];
+};
+
+export type WorkspaceItemType = "text" | "link" | "command";
+
+export type WorkspaceItem = {
+  id: string;
+  type: WorkspaceItemType;
+  title: string;
+  value: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type WorkspaceTodo = {
+  id: string;
+  title: string;
+  done: boolean;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export type EnvTemplate = {
@@ -129,6 +160,7 @@ export function createEmptyState(now = Date.now()): GlobalState {
     selectedEnvId: undefined,
     envs: {},
     templates: {},
+    globalWorkspace: createEmptyGlobalWorkspace(),
     groupBindings: {},
     ruleMeta: {
       activeRuleIds: []
@@ -162,6 +194,7 @@ export function createEnv({
       headers: [],
       queries: []
     },
+    workspace: createEmptyWorkspace(),
     createdAt: now,
     updatedAt: now
   };
@@ -215,6 +248,37 @@ export function createQueryRule(): QueryRule {
     enabled: true,
     key: "",
     value: ""
+  };
+}
+
+export function createWorkspaceItem({
+  type,
+  now = Date.now()
+}: {
+  type: WorkspaceItemType;
+  now?: number;
+}): WorkspaceItem {
+  return {
+    id: createId("item"),
+    type,
+    title: "",
+    value: "",
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+export function createWorkspaceTodo({
+  now = Date.now()
+}: {
+  now?: number;
+} = {}): WorkspaceTodo {
+  return {
+    id: createId("todo"),
+    title: "",
+    done: false,
+    createdAt: now,
+    updatedAt: now
   };
 }
 
@@ -322,7 +386,8 @@ export function sanitizeEnv(env: Env): Env {
           value: rule.value.trim()
         }))
         .filter((rule) => rule.key)
-    }
+    },
+    workspace: sanitizeWorkspace(env.workspace)
   };
 }
 
@@ -357,10 +422,39 @@ export function sanitizeState(state: GlobalState): GlobalState {
         sanitizeEnvTemplate(template)
       ])
     ),
+    globalWorkspace: sanitizeGlobalWorkspace(state.globalWorkspace),
     groupBindings: state.groupBindings ?? {},
     ruleMeta: state.ruleMeta ?? { activeRuleIds: [] },
     enabled: state.enabled ?? true,
     autoSwitch: state.autoSwitch ?? true
+  };
+}
+
+export function createEmptyWorkspace(): EnvWorkspace {
+  return {
+    items: [],
+    todos: [],
+    notes: ""
+  };
+}
+
+export function createEmptyGlobalWorkspace(): GlobalWorkspace {
+  return {
+    items: []
+  };
+}
+
+export function sanitizeGlobalWorkspace(workspace?: GlobalWorkspace): GlobalWorkspace {
+  return {
+    items: (workspace?.items ?? []).map(sanitizeWorkspaceItem)
+  };
+}
+
+export function sanitizeWorkspace(workspace?: EnvWorkspace): EnvWorkspace {
+  return {
+    items: (workspace?.items ?? []).map(sanitizeWorkspaceItem),
+    todos: (workspace?.todos ?? []).map(sanitizeWorkspaceTodo),
+    notes: String(workspace?.notes ?? "").trim()
   };
 }
 
@@ -451,6 +545,26 @@ export function reconcileGroupBindings(
   };
 }
 
+export function mergeRuleRefreshState(
+  latestState: GlobalState,
+  refreshedState: GlobalState,
+  ruleMeta: RuleMeta
+): GlobalState {
+  const nextEnvs = { ...latestState.envs };
+  for (const [envId, refreshedEnv] of Object.entries(refreshedState.envs)) {
+    const latestEnv = nextEnvs[envId];
+    nextEnvs[envId] = latestEnv
+      ? { ...latestEnv, linkedGroupKeys: refreshedEnv.linkedGroupKeys }
+      : refreshedEnv;
+  }
+  return {
+    ...latestState,
+    envs: nextEnvs,
+    groupBindings: refreshedState.groupBindings,
+    ruleMeta
+  };
+}
+
 export function summarizeRules(env: Env): string {
   const headers = env.rules.headers.filter((rule) => rule.enabled && rule.name).length;
   const queries = env.rules.queries.filter((rule) => rule.enabled && rule.key).length;
@@ -466,6 +580,32 @@ function cleanList(values: string[]): string[] {
         .filter(Boolean)
     )
   );
+}
+
+function sanitizeWorkspaceItem(item: WorkspaceItem): WorkspaceItem {
+  const type = isWorkspaceItemType(item.type) ? item.type : "text";
+  return {
+    ...item,
+    type,
+    title: String(item.title ?? "").trim(),
+    value: String(item.value ?? "").trim(),
+    createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+    updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now()
+  };
+}
+
+function sanitizeWorkspaceTodo(todo: WorkspaceTodo): WorkspaceTodo {
+  return {
+    ...todo,
+    title: String(todo.title ?? "").trim(),
+    done: Boolean(todo.done),
+    createdAt: Number.isFinite(todo.createdAt) ? todo.createdAt : Date.now(),
+    updatedAt: Number.isFinite(todo.updatedAt) ? todo.updatedAt : Date.now()
+  };
+}
+
+function isWorkspaceItemType(type: unknown): type is WorkspaceItemType {
+  return type === "text" || type === "link" || type === "command";
 }
 
 function sanitizeTemplateValueSource(

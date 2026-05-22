@@ -122,6 +122,7 @@ function makeState(): GlobalState {
     linkedGroupKeys: [],
     filters: { domains: ["pre.example.com"], paths: [], excludedDomains: [] },
     rules: { headers: [], queries: [] },
+    workspace: { items: [], todos: [], notes: "" },
     createdAt: 1,
     updatedAt: 1
   } satisfies Env;
