@@ -2,7 +2,7 @@ import { updateActionIcon } from "../src/extension/action-icon";
 import { getActiveContext, resolveTabsByGroup } from "../src/extension/chrome-api";
 import { loadState, saveState } from "../src/extension/storage";
 import { compileSessionRules } from "../src/model/dnr";
-import { reconcileGroupBindings } from "../src/model/env";
+import { mergeRuleRefreshState, reconcileGroupBindings } from "../src/model/env";
 
 let refreshing = false;
 
@@ -66,13 +66,14 @@ async function refreshSessionRules() {
 
     await updateActionIcon(reconciledState, context);
 
-    await saveState({
-      ...reconciledState,
-      ruleMeta: {
+    const latestState = await loadState();
+    const latestReconciledState = reconcileGroupBindings(latestState, context.availableGroups ?? []);
+    await saveState(
+      mergeRuleRefreshState(latestReconciledState, reconciledState, {
         activeRuleIds: newRuleIds,
         lastCompiledAt: Date.now()
-      }
-    });
+      })
+    );
   } finally {
     refreshing = false;
   }

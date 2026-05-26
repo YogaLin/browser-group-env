@@ -1,26 +1,33 @@
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Boxes,
+  ChevronDown,
   CheckCircle2,
   Copy,
+  ExternalLink,
   FileText,
   GripVertical,
   Languages,
   Link2,
+  PanelRightOpen,
   Pause,
   Plus,
   Power,
   RefreshCw,
   Search,
+  StickyNote,
   Trash2,
   X
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createBindingForCurrentGroup,
   createBindingForGroup,
   getActiveContext,
   openTemplateManagerPage,
+  openSidePanel,
   refreshRules,
   resolveTemplateDynamicValues
 } from "../extension/chrome-api";
@@ -30,6 +37,8 @@ import {
   createEnvTemplate,
   createHeaderRule,
   createQueryRule,
+  createWorkspaceItem,
+  createWorkspaceTodo,
   duplicateEnv,
   applyTemplateToEnv,
   formatTemplateValueSourceInput,
@@ -42,10 +51,13 @@ import {
   type AvailableTabGroup,
   type Env,
   type EnvTemplate,
+  type GlobalWorkspace,
   type GroupBinding,
   type GlobalState,
   type HeaderRule,
-  type MatchDiagnostics
+  type MatchDiagnostics,
+  type WorkspaceItem,
+  type WorkspaceTodo
 } from "../model/env";
 import { getDiagnostics } from "../model/diagnostics";
 import { ICON_LAYER_COLOR, getGroupColorHex } from "../model/group-color";
@@ -59,6 +71,7 @@ type MessageKey =
   | "manual"
   | "switchLanguage"
   | "templates"
+  | "openPanel"
   | "templateManagerTitle"
   | "newTemplate"
   | "templateName"
@@ -74,7 +87,6 @@ type MessageKey =
   | "templateAppliedHint"
   | "dragEnv"
   | "noEnvConfig"
-  | "diagnostics"
   | "searchPlaceholder"
   | "emptyEnvList"
   | "global"
@@ -99,7 +111,30 @@ type MessageKey =
   | "currentGroupHint"
   | "restorePending"
   | "noAvailableGroups"
+  | "envSettings"
+  | "workspaceTab"
+  | "rulesTab"
   | "filters"
+  | "workspace"
+  | "items"
+  | "globalItems"
+  | "envItems"
+  | "addItem"
+  | "addTodo"
+  | "todos"
+  | "notes"
+  | "title"
+  | "snippetNamePlaceholder"
+  | "itemValuePlaceholder"
+  | "todoPlaceholder"
+  | "notesPlaceholder"
+  | "emptyWorkspaceItems"
+  | "emptyTodos"
+  | "copyValue"
+  | "copiedValue"
+  | "openLink"
+  | "moveUp"
+  | "moveDown"
   | "domains"
   | "paths"
   | "excludedDomains"
@@ -119,18 +154,9 @@ type MessageKey =
   | "templateValueSourcePlaceholder"
   | "queryKeyPlaceholder"
   | "queryValuePlaceholder"
-  | "diagnosticsTitle"
   | "tabGroup"
-  | "domain"
-  | "noUrl"
-  | "queries"
-  | "domainMatch"
-  | "pathMatch"
-  | "yes"
-  | "no"
   | "matched"
   | "paused"
-  | "notMatched"
   | "newEnv";
 
 const MESSAGES: Record<Language, Record<MessageKey, string>> = {
@@ -142,6 +168,7 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     manual: "手动",
     switchLanguage: "Switch to English",
     templates: "模板管理",
+    openPanel: "打开面板",
     templateManagerTitle: "配置模板",
     newTemplate: "新建模板",
     templateName: "模板名称",
@@ -157,7 +184,6 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     templateAppliedHint: "应用后会生成普通过滤条件和请求头规则，可继续编辑。",
     dragEnv: "拖动排序",
     noEnvConfig: "暂无环境配置",
-    diagnostics: "诊断",
     searchPlaceholder: "搜索环境/配置",
     emptyEnvList: "暂无环境",
     global: "全局",
@@ -182,7 +208,30 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     currentGroupHint: "当前标签组",
     restorePending: "待恢复",
     noAvailableGroups: "当前没有可用标签组",
+    envSettings: "环境设置",
+    workspaceTab: "工作区",
+    rulesTab: "规则 / 过滤",
     filters: "过滤条件",
+    workspace: "工作区",
+    items: "片段",
+    globalItems: "全局片段",
+    envItems: "环境片段",
+    addItem: "+ 片段",
+    addTodo: "+ 待办",
+    todos: "待办",
+    notes: "备注",
+    title: "标题",
+    snippetNamePlaceholder: "片段名称（可选）",
+    itemValuePlaceholder: "输入要复制或打开的内容",
+    todoPlaceholder: "例如验证请求头命中",
+    notesPlaceholder: "记录当前环境的上下文、注意事项或临时说明",
+    emptyWorkspaceItems: "暂无片段，添加后可快速复制；检测到链接时可直接打开。",
+    emptyTodos: "暂无待办。",
+    copyValue: "复制",
+    copiedValue: "已复制",
+    openLink: "打开",
+    moveUp: "上移",
+    moveDown: "下移",
     domains: "域名",
     paths: "路径",
     excludedDomains: "排除域名",
@@ -202,18 +251,9 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     templateValueSourcePlaceholder: "xpath://meta[@name='env']/@content 或 css:#env",
     queryKeyPlaceholder: "例如 env",
     queryValuePlaceholder: "例如 feature_branch",
-    diagnosticsTitle: "当前页面诊断",
     tabGroup: "标签组",
-    domain: "域名",
-    noUrl: "无地址",
-    queries: "查询参数",
-    domainMatch: "域名命中",
-    pathMatch: "路径命中",
-    yes: "是",
-    no: "否",
     matched: "已命中",
     paused: "已暂停",
-    notMatched: "未命中",
     newEnv: "新环境"
   },
   en: {
@@ -223,7 +263,8 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     auto: "Auto",
     manual: "Manual",
     switchLanguage: "切换到中文",
-    templates: "Manage Templates",
+    templates: "Templates",
+    openPanel: "Open Panel",
     templateManagerTitle: "Config Templates",
     newTemplate: "New Template",
     templateName: "Template Name",
@@ -239,7 +280,6 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     templateAppliedHint: "Applying creates ordinary filters and header rules that remain editable.",
     dragEnv: "Drag to reorder",
     noEnvConfig: "No env",
-    diagnostics: "Diagnostics",
     searchPlaceholder: "Search envs/configs",
     emptyEnvList: "No envs",
     global: "Global",
@@ -264,7 +304,30 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     currentGroupHint: "Current tab group",
     restorePending: "pending restore",
     noAvailableGroups: "No available tab groups",
+    envSettings: "Env Settings",
+    workspaceTab: "Workspace",
+    rulesTab: "Rules / Filters",
     filters: "Filters",
+    workspace: "Workspace",
+    items: "Snippets",
+    globalItems: "Global Snippets",
+    envItems: "Env Snippets",
+    addItem: "+ Item",
+    addTodo: "+ Todos",
+    todos: "Todos",
+    notes: "Notes",
+    title: "Title",
+    snippetNamePlaceholder: "Snippet name (optional)",
+    itemValuePlaceholder: "Text to copy or URL to open",
+    todoPlaceholder: "e.g. verify header hit",
+    notesPlaceholder: "Context, caveats, or temporary notes for this env",
+    emptyWorkspaceItems: "No snippets yet. Add a value to copy it, or open it when it looks like a link.",
+    emptyTodos: "No todos yet.",
+    copyValue: "Copy",
+    copiedValue: "Copied",
+    openLink: "Open",
+    moveUp: "Move up",
+    moveDown: "Move down",
     domains: "Domains",
     paths: "Paths",
     excludedDomains: "Excluded Domains",
@@ -284,23 +347,15 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     templateValueSourcePlaceholder: "xpath://meta[@name='env']/@content or css:#env",
     queryKeyPlaceholder: "e.g. env",
     queryValuePlaceholder: "e.g. feature_branch",
-    diagnosticsTitle: "Page Diagnostics",
     tabGroup: "Tab Group",
-    domain: "Domain",
-    noUrl: "No URL",
-    queries: "Queries",
-    domainMatch: "Domain Match",
-    pathMatch: "Path Match",
-    yes: "Yes",
-    no: "No",
     matched: "Matched",
     paused: "Paused",
-    notMatched: "Not matched",
     newEnv: "New Env"
   }
 };
 
 const LANGUAGE_STORAGE_KEY = "browser-group-env.language";
+const ENV_DETAIL_TAB_STORAGE_KEY = "browser-group-env.envDetailTab";
 
 type DraftLists = {
   domains: string;
@@ -308,8 +363,17 @@ type DraftLists = {
   excludedDomains: string;
 };
 
+type EnvDetailTab = "workspace" | "rules";
+const ENV_DETAIL_TABS: EnvDetailTab[] = ["rules", "workspace"];
+const ENV_DETAIL_CONTENT_CLASS_NAME =
+  "min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 pb-8 pt-3";
+const HEADER_CONTROLS_CLASS_NAME =
+  "flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-1.5 text-notion-slate";
+const INPUT_CLEAR_BUTTON_CLASS_NAME =
+  "absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-notion-steel opacity-0 transition hover:bg-notion-surface hover:text-notion-charcoal group-hover:opacity-100 group-focus-within:opacity-100";
+
 type PopupAppProps = {
-  layout?: "popup" | "page";
+  layout?: "popup" | "page" | "sidepanel";
   templateManagerInitialOpen?: boolean;
   templateManagerTarget?: "modal" | "page";
   sourceTabId?: number;
@@ -459,14 +523,15 @@ export function PopupApp({
   }
 
   const isPageLayout = layout === "page";
+  const isSidePanelLayout = layout === "sidepanel";
 
   return (
     <main
       className={`overflow-hidden bg-notion-surface text-notion-ink ${
-        isPageLayout ? "h-screen w-screen" : "h-[600px] w-[760px]"
+        isPageLayout || isSidePanelLayout ? "h-screen w-screen" : "h-[600px] w-[760px]"
       }`}
     >
-      <section className="hero-reveal relative h-full w-full overflow-hidden bg-white shadow-workspace">
+      <section className="hero-reveal relative flex h-full w-full flex-col overflow-hidden bg-white shadow-workspace">
         <PopupHeader
           enabled={state.enabled}
           autoSwitch={state.autoSwitch}
@@ -488,115 +553,122 @@ export function PopupApp({
             }
             setTemplateManagerOpen(true);
           }}
+          onOpenPanel={isSidePanelLayout ? undefined : () => void openSidePanel()}
         />
-        <div
-          className={`grid grid-cols-[220px_minmax(0,1fr)] overflow-hidden bg-notion-surface ${
-            isPageLayout ? "h-[calc(100%-44px)]" : "h-[555px]"
-          }`}
-        >
-          <EnvList
-            envs={filteredEnvs}
-            selectedEnvId={selectedEnv?.id}
-            groupBindings={state.groupBindings}
-            search={search}
-            t={t}
-            onSearch={setSearch}
-            onSelect={(envId) =>
-              void mutateState((current) => selectEnvManually(current, envId))
-            }
-            onReorder={(draggedEnvId, targetEnvId) =>
-              void mutateState((current) => reorderEnvs(current, draggedEnvId, targetEnvId))
-            }
-            onDelete={(envId) => setPendingDeleteEnvId(envId)}
-            onCreate={() =>
-              void createEnvForCurrentContext(state, context).then((next) =>
-                mutateState(() => next)
-              )
-            }
-          />
-          {selectedEnv ? (
-            <EnvDetail
-              env={selectedEnv}
-              state={state}
-              context={context}
-              draftLists={draftLists}
-              templates={Object.values(state.templates)}
+        {isSidePanelLayout ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-notion-surface">
+            <SidePanelEnvSelector
+              envs={envs}
+              selectedEnvId={selectedEnv?.id}
               t={t}
-              onDraftLists={setDraftLists}
-              onUpdateEnv={updateSelectedEnv}
-              onCommitFilters={() =>
-                void updateSelectedEnv((env) => ({
-                  ...env,
-                  filters: {
-                    domains: splitList(draftLists.domains),
-                    paths: splitList(draftLists.paths),
-                    excludedDomains: splitList(draftLists.excludedDomains)
-                  }
-                }))
+              onSelect={(envId) =>
+                void mutateState((current) => selectEnvManually(current, envId))
               }
-              onBindGroup={(group) =>
-                void createBindingForGroup(selectedEnv.id, group).then((binding) =>
-                  mutateState((current) => replaceGroupBinding(current, binding))
+              onCreate={() =>
+                void createEnvForCurrentContext(state, context).then((next) =>
+                  mutateState(() => next)
                 )
               }
-              onUnbindGroup={(groupKey) =>
-                void mutateState((current) => {
-                  const nextBindings = { ...current.groupBindings };
-                  delete nextBindings[groupKey];
-                  const env = current.envs[selectedEnv.id];
-                  return {
-                    ...current,
-                    groupBindings: nextBindings,
-                    envs: {
-                      ...current.envs,
-                      [selectedEnv.id]: {
-                        ...env,
-                        linkedGroupKeys: env.linkedGroupKeys.filter(
-                          (linkedGroupKey) => linkedGroupKey !== groupKey
-                        ),
-                        updatedAt: Date.now()
-                      }
-                    }
-                  };
-                })
-              }
-              onDuplicate={() =>
-                void mutateState((current) => {
-                  const duplicated = duplicateEnv(selectedEnv);
-                  return {
-                    ...current,
-                    selectedEnvId: duplicated.id,
-                    envs: {
-                      ...current.envs,
-                      [duplicated.id]: duplicated
-                    }
-                  };
-                })
-              }
-              onDelete={() => setPendingDeleteEnvId(selectedEnv.id)}
-              onApplyTemplate={(template) => {
-                void (async () => {
-                  const resolvedTemplate = await resolveTemplateDynamicValues(
-                    template,
-                    sourceTabId ?? context.tabId
-                  );
-                  setDraftLists({
-                    domains: resolvedTemplate.filters.domains.join(", "),
-                    paths: resolvedTemplate.filters.paths.join(", "),
-                    excludedDomains: resolvedTemplate.filters.excludedDomains.join(", ")
-                  });
-                  await updateSelectedEnv((env) => applyTemplateToEnv(env, resolvedTemplate));
-                })();
-              }}
             />
-          ) : (
-            <EmptyEnvState t={t} onCreate={() =>
-              void createEnvForCurrentContext(state, context).then((next) =>
-                mutateState(() => next)
-              )
-            } />
-          )}
-        </div>
+            <div className="min-h-0 flex-1">
+              {selectedEnv ? (
+                <EnvDetailView
+                  env={selectedEnv}
+                  state={state}
+                  context={context}
+                  draftLists={draftLists}
+                  templates={Object.values(state.templates)}
+                  diagnostics={diagnostics}
+                  t={t}
+                  sourceTabId={sourceTabId}
+                  onDraftLists={setDraftLists}
+                  onUpdateEnv={updateSelectedEnv}
+                  onCommitFilters={() =>
+                    void updateSelectedEnv((env) => ({
+                      ...env,
+                      filters: {
+                        domains: splitList(draftLists.domains),
+                        paths: splitList(draftLists.paths),
+                        excludedDomains: splitList(draftLists.excludedDomains)
+                      }
+                    }))
+                  }
+                  onMutateState={mutateState}
+                  onDeleteEnv={(envId) => setPendingDeleteEnvId(envId)}
+                />
+              ) : (
+                <EmptyEnvState
+                  t={t}
+                  onCreate={() =>
+                    void createEnvForCurrentContext(state, context).then((next) =>
+                      mutateState(() => next)
+                    )
+                  }
+                />
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] overflow-hidden bg-notion-surface"
+          >
+            <EnvList
+              envs={filteredEnvs}
+              selectedEnvId={selectedEnv?.id}
+              groupBindings={state.groupBindings}
+              search={search}
+              t={t}
+              onSearch={setSearch}
+              onSelect={(envId) =>
+                void mutateState((current) => selectEnvManually(current, envId))
+              }
+              onReorder={(draggedEnvId, targetEnvId) =>
+                void mutateState((current) => reorderEnvs(current, draggedEnvId, targetEnvId))
+              }
+              onDelete={(envId) => setPendingDeleteEnvId(envId)}
+              onCreate={() =>
+                void createEnvForCurrentContext(state, context).then((next) =>
+                  mutateState(() => next)
+                )
+              }
+            />
+            {selectedEnv ? (
+              <EnvDetailView
+                env={selectedEnv}
+                state={state}
+                context={context}
+                draftLists={draftLists}
+                templates={Object.values(state.templates)}
+                diagnostics={diagnostics}
+                t={t}
+                sourceTabId={sourceTabId}
+                onDraftLists={setDraftLists}
+                onUpdateEnv={updateSelectedEnv}
+                onCommitFilters={() =>
+                  void updateSelectedEnv((env) => ({
+                    ...env,
+                    filters: {
+                      domains: splitList(draftLists.domains),
+                      paths: splitList(draftLists.paths),
+                      excludedDomains: splitList(draftLists.excludedDomains)
+                    }
+                  }))
+                }
+                onMutateState={mutateState}
+                onDeleteEnv={(envId) => setPendingDeleteEnvId(envId)}
+              />
+            ) : (
+              <EmptyEnvState
+                t={t}
+                onCreate={() =>
+                  void createEnvForCurrentContext(state, context).then((next) =>
+                    mutateState(() => next)
+                  )
+                }
+              />
+            )}
+          </div>
+        )}
         {templateManagerOpen ? (
           <TemplateManagerModal
             layout={layout}
@@ -657,7 +729,8 @@ function PopupHeader({
   onToggleEnabled,
   onToggleAuto,
   onToggleLanguage,
-  onOpenTemplates
+  onOpenTemplates,
+  onOpenPanel
 }: {
   enabled: boolean;
   autoSwitch: boolean;
@@ -669,19 +742,20 @@ function PopupHeader({
   onToggleAuto: () => void;
   onToggleLanguage: () => void;
   onOpenTemplates: () => void;
+  onOpenPanel?: () => void;
 }) {
   return (
     <header className="bg-white">
-      <div className="flex h-11 items-center justify-between gap-3 border-b border-notion-hairline px-3">
+      <div className="flex min-h-11 items-center gap-2 border-b border-notion-hairline px-3 py-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <BrandIcon color={getGroupColorHex(groupColor)} />
           <StatusBadge diagnostics={diagnostics} language={language} t={t} />
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 text-notion-slate">
+        <div className={getHeaderControlsClassName()}>
           <button
             onClick={onToggleEnabled}
-            className={`rounded-md border px-2 py-1 text-xs font-medium transition hover:border-notion-primary hover:text-notion-primary ${
+            className={`whitespace-nowrap rounded-md border px-2 py-1 text-xs font-medium transition hover:border-notion-primary hover:text-notion-primary ${
               enabled
                 ? "border-notion-primary bg-notion-lavender text-notion-primary"
                 : "border-notion-hairline bg-notion-surface text-notion-steel"
@@ -697,7 +771,7 @@ function PopupHeader({
           </button>
           <button
             onClick={onToggleAuto}
-            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+            className={`whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium transition ${
               autoSwitch
                 ? "border-notion-primary bg-notion-lavender text-notion-primary"
                 : "border-notion-hairline bg-notion-surface text-notion-slate"
@@ -708,14 +782,23 @@ function PopupHeader({
           </button>
           <button
             onClick={onOpenTemplates}
-            className="rounded-md border border-notion-hairline px-2 py-1 text-xs font-medium text-notion-slate transition hover:border-notion-primary hover:text-notion-primary"
+            className="whitespace-nowrap rounded-md border border-notion-hairline px-2 py-1 text-xs font-medium text-notion-slate transition hover:border-notion-primary hover:text-notion-primary"
           >
             <FileText size={14} className="mr-1 inline" />
             {t("templates")}
           </button>
+          {onOpenPanel ? (
+            <button
+              onClick={onOpenPanel}
+              className="whitespace-nowrap rounded-md border border-notion-hairline px-2 py-1 text-xs font-medium text-notion-slate transition hover:border-notion-primary hover:text-notion-primary"
+            >
+              <PanelRightOpen size={14} className="mr-1 inline" />
+              {t("openPanel")}
+            </button>
+          ) : null}
           <button
             onClick={onToggleLanguage}
-            className="rounded-md border border-notion-hairline px-2 py-1 text-xs font-medium text-notion-slate transition hover:border-notion-primary hover:text-notion-primary"
+            className="whitespace-nowrap rounded-md border border-notion-hairline px-2 py-1 text-xs font-medium text-notion-slate transition hover:border-notion-primary hover:text-notion-primary"
             title={t("switchLanguage")}
           >
             <Languages size={14} className="mr-1 inline" />
@@ -796,7 +879,7 @@ function EnvList({
     <aside className="border-r border-notion-hairline bg-notion-soft">
       <div className="px-3 py-3">
         <label className="flex min-w-0 items-center gap-2 rounded-md border border-notion-hairline bg-white px-3 py-2 text-sm text-notion-steel">
-          <input
+          <ImeSafeInput
             value={search}
             onChange={(event) => onSearch(event.target.value)}
             className="min-w-0 flex-1 bg-transparent outline-none"
@@ -899,15 +982,217 @@ function EnvList({
   );
 }
 
+function SidePanelEnvSelector({
+  envs,
+  selectedEnvId,
+  t,
+  onSelect,
+  onCreate
+}: {
+  envs: Env[];
+  selectedEnvId?: string;
+  t: (key: MessageKey) => string;
+  onSelect: (envId: string) => void;
+  onCreate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectorRef = useRef<HTMLDivElement>(null);
+  const selectedEnv = selectedEnvId ? envs.find((env) => env.id === selectedEnvId) : undefined;
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        shouldCloseDropdownOnDocumentClick({
+          open,
+          targetInside: Boolean(
+            event.target instanceof Node && selectorRef.current?.contains(event.target)
+          )
+        })
+      ) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  return (
+    <section className="shrink-0 border-b border-notion-hairline bg-white p-3">
+      <div className="flex items-center gap-2">
+        <div ref={selectorRef} className="relative min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            className="flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-notion-hairline bg-white px-3 text-left text-sm font-semibold text-notion-charcoal shadow-sm outline-none transition hover:border-notion-primary focus:border-notion-primary focus:ring-2 focus:ring-notion-primary/15"
+          >
+            <span className="truncate">{selectedEnv?.name ?? t("emptyEnvList")}</span>
+            <ChevronDown
+              size={16}
+              className={`shrink-0 text-notion-steel transition ${open ? "rotate-180" : ""}`}
+            />
+          </button>
+          {open ? (
+            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-64 overflow-y-auto rounded-md border border-notion-hairline bg-white p-1 shadow-lg">
+              {envs.length ? (
+                envs.map((env) => {
+                  const selected = env.id === selectedEnvId;
+                  return (
+                    <button
+                      key={env.id}
+                      type="button"
+                      onClick={() => {
+                        onSelect(env.id);
+                        setOpen(false);
+                      }}
+                      className={`flex w-full min-w-0 items-center justify-between gap-2 rounded px-2 py-2 text-left text-sm transition ${
+                        selected
+                          ? "bg-notion-lavender font-semibold text-notion-primary"
+                          : "text-notion-charcoal hover:bg-notion-surface"
+                      }`}
+                    >
+                      <span className="truncate">{env.name}</span>
+                      {selected ? <CheckCircle2 size={15} className="shrink-0" /> : null}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="px-2 py-4 text-center text-xs text-notion-steel">
+                  {t("emptyEnvList")}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+        <button
+          onClick={onCreate}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-notion-primary text-white shadow-sm transition hover:bg-[#4534b3]"
+          title={t("createEnv")}
+          aria-label={t("createEnv")}
+        >
+          <Plus size={18} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function EnvDetailView({
+  env,
+  state,
+  context,
+  draftLists,
+  templates,
+  diagnostics,
+  t,
+  sourceTabId,
+  onDraftLists,
+  onUpdateEnv,
+  onCommitFilters,
+  onMutateState,
+  onDeleteEnv
+}: {
+  env: Env;
+  state: GlobalState;
+  context: ActiveContext;
+  draftLists: DraftLists;
+  templates: EnvTemplate[];
+  diagnostics: MatchDiagnostics;
+  t: (key: MessageKey) => string;
+  sourceTabId?: number;
+  onDraftLists: (value: DraftLists) => void;
+  onUpdateEnv: (updater: (env: Env) => Env) => Promise<void>;
+  onCommitFilters: () => void;
+  onMutateState: (mutator: (current: GlobalState) => GlobalState) => Promise<void>;
+  onDeleteEnv: (envId: string) => void;
+}) {
+  return (
+    <EnvDetail
+      env={env}
+      state={state}
+      context={context}
+      draftLists={draftLists}
+      templates={templates}
+      diagnostics={diagnostics}
+      t={t}
+      onDraftLists={onDraftLists}
+      onUpdateEnv={onUpdateEnv}
+      onUpdateGlobalWorkspace={(updater) =>
+        onMutateState((current) => ({
+          ...current,
+          globalWorkspace: updater(current.globalWorkspace ?? { items: [] })
+        }))
+      }
+      onCommitFilters={onCommitFilters}
+      onBindGroup={(group) =>
+        void createBindingForGroup(env.id, group).then((binding) =>
+          onMutateState((current) => replaceGroupBinding(current, binding))
+        )
+      }
+      onUnbindGroup={(groupKey) =>
+        void onMutateState((current) => {
+          const nextBindings = { ...current.groupBindings };
+          delete nextBindings[groupKey];
+          const currentEnv = current.envs[env.id];
+          return {
+            ...current,
+            groupBindings: nextBindings,
+            envs: {
+              ...current.envs,
+              [env.id]: {
+                ...currentEnv,
+                linkedGroupKeys: currentEnv.linkedGroupKeys.filter(
+                  (linkedGroupKey) => linkedGroupKey !== groupKey
+                ),
+                updatedAt: Date.now()
+              }
+            }
+          };
+        })
+      }
+      onDuplicate={() =>
+        void onMutateState((current) => {
+          const duplicated = duplicateEnv(env);
+          return {
+            ...current,
+            selectedEnvId: duplicated.id,
+            envs: {
+              ...current.envs,
+              [duplicated.id]: duplicated
+            }
+          };
+        })
+      }
+      onDelete={() => onDeleteEnv(env.id)}
+      onApplyTemplate={(template) => {
+        void (async () => {
+          const resolvedTemplate = await resolveTemplateDynamicValues(
+            template,
+            sourceTabId ?? context.tabId
+          );
+          onDraftLists({
+            domains: resolvedTemplate.filters.domains.join(", "),
+            paths: resolvedTemplate.filters.paths.join(", "),
+            excludedDomains: resolvedTemplate.filters.excludedDomains.join(", ")
+          });
+          await onUpdateEnv((current) => applyTemplateToEnv(current, resolvedTemplate));
+        })();
+      }}
+    />
+  );
+}
+
 function EnvDetail({
   env,
   state,
   context,
   draftLists,
   templates,
+  diagnostics,
   t,
   onDraftLists,
   onUpdateEnv,
+  onUpdateGlobalWorkspace,
   onCommitFilters,
   onBindGroup,
   onUnbindGroup,
@@ -920,9 +1205,11 @@ function EnvDetail({
   context: ActiveContext;
   draftLists: DraftLists;
   templates: EnvTemplate[];
+  diagnostics: MatchDiagnostics;
   t: (key: MessageKey) => string;
   onDraftLists: (value: DraftLists) => void;
   onUpdateEnv: (updater: (env: Env) => Env) => Promise<void>;
+  onUpdateGlobalWorkspace: (updater: (workspace: GlobalWorkspace) => GlobalWorkspace) => Promise<void>;
   onCommitFilters: () => void;
   onBindGroup: (group: AvailableTabGroup) => void;
   onUnbindGroup: (groupKey: string) => void;
@@ -974,12 +1261,134 @@ function EnvDetail({
     })),
     ...unresolvedGroups
   ];
+  const [activeTab, setActiveTab] = useState<EnvDetailTab>(() =>
+    getInitialEnvDetailTab(readEnvDetailTab())
+  );
+  const selectTab = useCallback((tab: EnvDetailTab) => {
+    writeEnvDetailTab(tab);
+    setActiveTab(tab);
+  }, []);
 
   return (
     <section className="flex h-full min-w-0 flex-col overflow-hidden bg-white">
-      <div className="shrink-0 px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <input
+      <div className="shrink-0 border-b border-notion-hairline px-4 py-2.5">
+        <div className="inline-flex rounded-md border border-notion-hairline bg-notion-soft p-0.5">
+          {getEnvDetailTabs().map((tab) => (
+            <TabButton
+              key={tab}
+              active={activeTab === tab}
+              label={tab === "rules" ? t("rulesTab") : t("workspaceTab")}
+              onClick={() => selectTab(tab)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className={getEnvDetailContentClassName()}>
+        {activeTab === "workspace" ? (
+          <WorkspaceCard
+            env={env}
+            globalWorkspace={state.globalWorkspace}
+            t={t}
+            onUpdateEnv={onUpdateEnv}
+            onUpdateGlobalWorkspace={onUpdateGlobalWorkspace}
+          />
+        ) : (
+          <>
+            <EnvSettingsCard
+              env={env}
+              isGlobal={isGlobal}
+              groups={visibleGroups}
+              context={context}
+              t={t}
+              onUpdateEnv={onUpdateEnv}
+              onDuplicate={onDuplicate}
+              onDelete={onDelete}
+              onBindGroup={onBindGroup}
+              onUnbindGroup={onUnbindGroup}
+            />
+            {isEnvEmptyForTemplate(env) ? (
+              <TemplateChooser templates={templates} t={t} onApplyTemplate={onApplyTemplate} />
+            ) : null}
+            <RuleCard env={env} t={t} onUpdateEnv={onUpdateEnv} />
+            <FilterCard
+              drafts={draftLists}
+              t={t}
+              onDrafts={onDraftLists}
+              onCommit={onCommitFilters}
+              onCommitDrafts={commitFilterDrafts}
+              activeHostname={context.hostname}
+              onUseCurrentHostname={useCurrentHostname}
+              disabledReason={env.filters.domains.length === 0 ? t("noDomainDisabled") : undefined}
+            />
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function TabButton({
+  active,
+  label,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded px-3 py-1.5 text-xs font-semibold transition ${
+        active
+          ? "bg-white text-notion-primary shadow-sm"
+          : "text-notion-slate hover:bg-white/70 hover:text-notion-primary"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function EnvSettingsCard({
+  env,
+  isGlobal,
+  groups,
+  context,
+  t,
+  onUpdateEnv,
+  onDuplicate,
+  onDelete,
+  onBindGroup,
+  onUnbindGroup
+}: {
+  env: Env;
+  isGlobal: boolean;
+  groups: Array<
+    | (AvailableTabGroup & { unresolved: false })
+    | { groupKey: string; title: string; unresolved: true }
+  >;
+  context: ActiveContext;
+  t: (key: MessageKey) => string;
+  onUpdateEnv: (updater: (env: Env) => Env) => Promise<void>;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onBindGroup: (group: AvailableTabGroup) => void;
+  onUnbindGroup: (groupKey: string) => void;
+}) {
+  return (
+    <details className="rounded-lg border border-notion-hairline bg-white">
+      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-notion-charcoal">
+        {t("envSettings")}
+      </summary>
+      <div className="space-y-3 border-t border-notion-hairline bg-notion-soft p-3">
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-notion-steel">
+            {t("name")}
+          </span>
+          <ImeSafeInput
             value={env.name}
             onChange={(event) =>
               void onUpdateEnv((current) => ({
@@ -987,31 +1396,28 @@ function EnvDetail({
                 name: event.target.value
               }))
             }
-            className="min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-lg font-semibold outline-none transition focus:border-notion-primary focus:bg-white"
+            className="mt-1.5 w-full rounded-md border border-notion-hairline bg-white px-2 py-1.5 text-sm font-semibold outline-none transition focus:border-notion-primary focus:ring-2 focus:ring-notion-primary/15"
           />
-          <div className="flex shrink-0 items-center gap-1.5">
-            <label className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-notion-hairline px-2 py-1.5 text-xs font-medium text-notion-slate">
-              <input
-                type="checkbox"
-                checked={isGlobal}
-                onChange={(event) =>
-                  void onUpdateEnv((current) => ({
-                    ...current,
-                    scope: event.target.checked ? "global" : "group"
-                  }))
-                }
-              />
-              {t("alwaysOn")}
-            </label>
-            <IconButton icon={Copy} label={t("copy")} onClick={onDuplicate} />
-            <IconButton icon={Trash2} label={t("delete")} danger onClick={onDelete} />
-          </div>
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-notion-hairline bg-white px-2 py-1.5 text-xs font-medium text-notion-slate">
+            <input
+              type="checkbox"
+              checked={isGlobal}
+              onChange={(event) =>
+                void onUpdateEnv((current) => ({
+                  ...current,
+                  scope: event.target.checked ? "global" : "group"
+                }))
+              }
+            />
+            {t("alwaysOn")}
+          </label>
+          <IconButton icon={Copy} label={t("copy")} onClick={onDuplicate} />
+          <IconButton icon={Trash2} label={t("delete")} danger onClick={onDelete} />
         </div>
-      </div>
-
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 pb-8">
         <BindingCard
-          groups={visibleGroups}
+          groups={groups}
           linkedGroupKeys={env.linkedGroupKeys}
           context={context}
           scope={env.scope}
@@ -1019,22 +1425,8 @@ function EnvDetail({
           onBindGroup={onBindGroup}
           onUnbindGroup={onUnbindGroup}
         />
-        {isEnvEmptyForTemplate(env) ? (
-          <TemplateChooser templates={templates} t={t} onApplyTemplate={onApplyTemplate} />
-        ) : null}
-        <RuleCard env={env} t={t} onUpdateEnv={onUpdateEnv} />
-        <FilterCard
-          drafts={draftLists}
-          t={t}
-          onDrafts={onDraftLists}
-          onCommit={onCommitFilters}
-          onCommitDrafts={commitFilterDrafts}
-          activeHostname={context.hostname}
-          onUseCurrentHostname={useCurrentHostname}
-          disabledReason={env.filters.domains.length === 0 ? t("noDomainDisabled") : undefined}
-        />
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -1119,7 +1511,7 @@ function TemplateManagerModal({
   onSaveTemplate,
   onDeleteTemplate
 }: {
-  layout: "popup" | "page";
+  layout: "popup" | "page" | "sidepanel";
   templates: EnvTemplate[];
   t: (key: MessageKey) => string;
   onClose: () => void;
@@ -1246,7 +1638,7 @@ function TemplateManagerModal({
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               <label className="block">
                 <span className="text-xs font-semibold text-notion-steel">{t("templateName")}</span>
-                <input
+                <ImeSafeInput
                   value={draft.template.name}
                   onChange={(event) =>
                     updateTemplate((template) => ({ ...template, name: event.target.value }))
@@ -1497,6 +1889,420 @@ function BindingCard({
   );
 }
 
+function WorkspaceCard({
+  env,
+  globalWorkspace,
+  t,
+  onUpdateEnv,
+  onUpdateGlobalWorkspace
+}: {
+  env: Env;
+  globalWorkspace: GlobalWorkspace;
+  t: (key: MessageKey) => string;
+  onUpdateEnv: (updater: (env: Env) => Env) => Promise<void>;
+  onUpdateGlobalWorkspace: (updater: (workspace: GlobalWorkspace) => GlobalWorkspace) => Promise<void>;
+}) {
+  const addGlobalItem = () => {
+    void onUpdateGlobalWorkspace((current) => ({
+      ...current,
+      items: [...current.items, createWorkspaceItem({ type: getWorkspaceItemAddTypes()[0] })]
+    }));
+  };
+  const addItem = () => {
+    void onUpdateEnv((current) => ({
+      ...current,
+      workspace: {
+        ...current.workspace,
+        items: [...current.workspace.items, createWorkspaceItem({ type: getWorkspaceItemAddTypes()[0] })]
+      }
+    }));
+  };
+  const addTodo = () => {
+    void onUpdateEnv((current) => ({
+      ...current,
+      workspace: {
+        ...current.workspace,
+        todos: [...current.workspace.todos, createWorkspaceTodo()]
+      }
+    }));
+  };
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-notion-hairline bg-white">
+      <div className="space-y-4 p-3">
+        <WorkspaceItems
+          title={t("globalItems")}
+          items={globalWorkspace.items}
+          t={t}
+          onAddItem={addGlobalItem}
+          onChange={(itemId, patch) =>
+            void onUpdateGlobalWorkspace((current) => ({
+              ...current,
+              items: current.items.map((item) =>
+                item.id === itemId ? { ...item, ...patch, updatedAt: Date.now() } : item
+              )
+            }))
+          }
+          onDelete={(itemId) =>
+            void onUpdateGlobalWorkspace((current) => ({
+              ...current,
+              items: current.items.filter((item) => item.id !== itemId)
+            }))
+          }
+          onReorder={(draggedItemId, targetItemId) =>
+            void onUpdateGlobalWorkspace((current) => ({
+              ...current,
+              items: reorderRows(current.items, draggedItemId, targetItemId)
+            }))
+          }
+        />
+        <WorkspaceItems
+          title={t("envItems")}
+          items={env.workspace.items}
+          t={t}
+          onAddItem={addItem}
+          onChange={(itemId, patch) =>
+            void onUpdateEnv((current) => ({
+              ...current,
+              workspace: {
+                ...current.workspace,
+                items: current.workspace.items.map((item) =>
+                  item.id === itemId ? { ...item, ...patch, updatedAt: Date.now() } : item
+                )
+              }
+            }))
+          }
+          onDelete={(itemId) =>
+            void onUpdateEnv((current) => ({
+              ...current,
+              workspace: {
+                ...current.workspace,
+                items: current.workspace.items.filter((item) => item.id !== itemId)
+              }
+            }))
+          }
+          onReorder={(draggedItemId, targetItemId) =>
+            void onUpdateEnv((current) => ({
+              ...current,
+              workspace: {
+                ...current.workspace,
+                items: reorderRows(current.workspace.items, draggedItemId, targetItemId)
+              }
+            }))
+          }
+        />
+        <WorkspaceTodos
+          todos={env.workspace.todos}
+          t={t}
+          onAddTodo={addTodo}
+          onChange={(todoId, patch) =>
+            void onUpdateEnv((current) => ({
+              ...current,
+              workspace: {
+                ...current.workspace,
+                todos: current.workspace.todos.map((todo) =>
+                  todo.id === todoId ? { ...todo, ...patch, updatedAt: Date.now() } : todo
+                )
+              }
+            }))
+          }
+          onDelete={(todoId) =>
+            void onUpdateEnv((current) => ({
+              ...current,
+              workspace: {
+                ...current.workspace,
+                todos: current.workspace.todos.filter((todo) => todo.id !== todoId)
+              }
+            }))
+          }
+          onMove={(todoId, direction) =>
+            void onUpdateEnv((current) => ({
+              ...current,
+              workspace: {
+                ...current.workspace,
+                todos: moveRow(current.workspace.todos, todoId, direction)
+              }
+            }))
+          }
+        />
+        <div>
+          <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-notion-charcoal">
+            <StickyNote size={15} className="text-notion-primary" />
+            {t("notes")}
+          </div>
+          <ImeSafeTextarea
+            value={env.workspace.notes}
+            placeholder={t("notesPlaceholder")}
+            onChange={(event) =>
+              void onUpdateEnv((current) => ({
+                ...current,
+                workspace: {
+                  ...current.workspace,
+                  notes: event.target.value
+                }
+              }))
+            }
+            className="min-h-[88px] w-full resize-y rounded-md border border-notion-hairline bg-notion-soft px-2 py-2 text-xs leading-5 outline-none transition placeholder:text-notion-steel/70 focus:border-notion-primary focus:bg-white focus:ring-2 focus:ring-notion-primary/15"
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceItems({
+  title,
+  items,
+  t,
+  onAddItem,
+  onChange,
+  onDelete,
+  onReorder
+}: {
+  title: string;
+  items: WorkspaceItem[];
+  t: (key: MessageKey) => string;
+  onAddItem: () => void;
+  onChange: (itemId: string, patch: Partial<Pick<WorkspaceItem, "title" | "value">>) => void;
+  onDelete: (itemId: string) => void;
+  onReorder: (draggedItemId: string, targetItemId: string) => void;
+}) {
+  const [draggingItemId, setDraggingItemId] = useState<string>();
+  const [copiedItemId, setCopiedItemId] = useState<string>();
+  const copiedTimerRef = useRef<number>();
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+    },
+    []
+  );
+
+  const handleDrop = (event: React.DragEvent, targetItemId: string) => {
+    event.preventDefault();
+    const draggedItemId =
+      event.dataTransfer.getData("application/x-browser-group-workspace-item-id") ||
+      draggingItemId;
+    setDraggingItemId(undefined);
+    if (!draggedItemId || draggedItemId === targetItemId) {
+      return;
+    }
+    onReorder(draggedItemId, targetItemId);
+  };
+
+  const handleCopy = async (item: WorkspaceItem) => {
+    if (!item.value.trim()) {
+      return;
+    }
+    await runWorkspaceItemAction(item);
+    setCopiedItemId(item.id);
+    if (copiedTimerRef.current) {
+      window.clearTimeout(copiedTimerRef.current);
+    }
+    copiedTimerRef.current = window.setTimeout(() => setCopiedItemId(undefined), 1200);
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-notion-charcoal">
+          <Copy size={15} className="text-notion-primary" />
+          {title}
+        </div>
+        <button
+          type="button"
+          onClick={onAddItem}
+          className="rounded-md border border-notion-hairline bg-white px-2 py-1 text-xs font-semibold text-notion-primary"
+        >
+          {t("addItem")}
+        </button>
+      </div>
+      {items.length ? (
+        <div className="space-y-1.5">
+          {items.map((item) => {
+            const actions = getWorkspaceItemActions(item.value);
+            const isCopied = copiedItemId === item.id;
+            const copyLabel = getWorkspaceItemCopyLabel(
+              isCopied,
+              t("copyValue"),
+              t("copiedValue")
+            );
+            return (
+              <div
+                key={item.id}
+                onDragOver={(event) => {
+                  if (draggingItemId && draggingItemId !== item.id) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }
+                }}
+                onDrop={(event) => handleDrop(event, item.id)}
+                className={getWorkspaceItemRowClassName(draggingItemId === item.id)}
+              >
+                <span
+                  className={getWorkspaceItemDragHandleClassName()}
+                  draggable
+                  onDragStart={(event) => {
+                    setDraggingItemId(item.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData(
+                      "application/x-browser-group-workspace-item-id",
+                      item.id
+                    );
+                  }}
+                  onDragEnd={() => setDraggingItemId(undefined)}
+                  title={t("dragEnv")}
+                  aria-hidden="true"
+                >
+                  <GripVertical size={14} />
+                </span>
+                <div className="min-w-0">
+                  <RuleInput
+                    value={item.title}
+                    placeholder={t("snippetNamePlaceholder")}
+                    onChange={(title) => onChange(item.id, { title })}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <RuleInput
+                    value={item.value}
+                    placeholder={t("itemValuePlaceholder")}
+                    onChange={(value) => onChange(item.id, { value })}
+                  />
+                </div>
+                <div className="flex shrink-0 items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopy(item)}
+                    className={getWorkspaceItemActionButtonClassName("copy", isCopied)}
+                    title={copyLabel}
+                    aria-label={copyLabel}
+                  >
+                    {isCopied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+                  </button>
+                  {actions.includes("open") ? (
+                    <button
+                      type="button"
+                      onClick={() => openWorkspaceItemLink(item.value)}
+                      className={getWorkspaceItemActionButtonClassName("open", false)}
+                      title={t("openLink")}
+                      aria-label={t("openLink")}
+                    >
+                      <ExternalLink size={15} />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onDelete(item.id)}
+                    className={getWorkspaceItemActionButtonClassName("delete", false)}
+                    title={t("delete")}
+                    aria-label={t("delete")}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-notion-hairline bg-notion-soft px-3 py-4 text-xs text-notion-steel">
+          {t("emptyWorkspaceItems")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkspaceTodos({
+  todos,
+  t,
+  onAddTodo,
+  onChange,
+  onDelete,
+  onMove
+}: {
+  todos: WorkspaceTodo[];
+  t: (key: MessageKey) => string;
+  onAddTodo: () => void;
+  onChange: (todoId: string, patch: Partial<Pick<WorkspaceTodo, "title" | "done">>) => void;
+  onDelete: (todoId: string) => void;
+  onMove: (todoId: string, direction: "up" | "down") => void;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-notion-charcoal">
+          <CheckCircle2 size={15} className="text-notion-primary" />
+          {t("todos")}
+        </div>
+        <button
+          type="button"
+          onClick={onAddTodo}
+          className="rounded-md border border-notion-hairline bg-white px-2 py-1 text-xs font-semibold text-notion-primary"
+        >
+          {t("addTodo")}
+        </button>
+      </div>
+      {todos.length ? (
+        <div className="space-y-1.5">
+          {todos.map((todo, index) => (
+            <div
+              key={todo.id}
+              className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md border border-notion-hairline bg-notion-soft px-2 py-1.5"
+            >
+              <input
+                type="checkbox"
+                checked={todo.done}
+                onChange={(event) => onChange(todo.id, { done: event.target.checked })}
+              />
+              <RuleInput
+                value={todo.title}
+                placeholder={t("todoPlaceholder")}
+                onChange={(value) => onChange(todo.id, { title: value })}
+              />
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onMove(todo.id, "up")}
+                  disabled={index === 0}
+                  className="rounded p-1.5 text-notion-steel transition hover:bg-white disabled:opacity-35"
+                  title={t("moveUp")}
+                >
+                  <ArrowUp size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMove(todo.id, "down")}
+                  disabled={index === todos.length - 1}
+                  className="rounded p-1.5 text-notion-steel transition hover:bg-white disabled:opacity-35"
+                  title={t("moveDown")}
+                >
+                  <ArrowDown size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(todo.id)}
+                  className="rounded p-1.5 text-red-600 transition hover:bg-red-50"
+                  title={t("delete")}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-notion-hairline bg-notion-soft px-3 py-3 text-xs text-notion-steel">
+          {t("emptyTodos")}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FilterCard({
   drafts,
   t,
@@ -1608,9 +2414,9 @@ function FilterInput({
           </button>
         ) : null}
       </div>
-      <div className="relative mt-1.5">
-        <input
-          aria-label={label}
+      <div className="group relative mt-1.5">
+        <ImeSafeInput
+          ariaLabel={label}
           value={value}
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
@@ -1620,9 +2426,7 @@ function FilterInput({
         <button
           type="button"
           onClick={onClear}
-          className={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-notion-steel transition hover:bg-notion-surface hover:text-notion-charcoal ${
-            value ? "" : "opacity-45"
-          }`}
+          className={getInputClearButtonClassName(Boolean(value), "right-1.5")}
           aria-label={`Clear ${label}`}
         >
           <X size={13} />
@@ -1832,8 +2636,8 @@ function TemplateSourceInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="relative mr-1 min-w-0">
-      <input
+    <div className="group relative mr-1 min-w-0">
+      <ImeSafeInput
         value={value}
         placeholder={placeholder}
         onChange={(event) => {
@@ -1846,9 +2650,7 @@ function TemplateSourceInput({
         onClick={() => {
           onChange("");
         }}
-        className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-notion-steel transition hover:bg-notion-surface hover:text-notion-charcoal ${
-          value ? "" : "opacity-45"
-        }`}
+        className={getInputClearButtonClassName(Boolean(value))}
         aria-label="Clear"
       >
         <X size={13} />
@@ -1921,8 +2723,8 @@ function RuleInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="relative mr-1 min-w-0">
-      <input
+    <div className="group relative mr-1 min-w-0">
+      <ImeSafeInput
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
@@ -1931,14 +2733,136 @@ function RuleInput({
       <button
         type="button"
         onClick={() => onChange("")}
-        className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-notion-steel transition hover:bg-notion-surface hover:text-notion-charcoal ${
-          value ? "" : "opacity-45"
-        }`}
+        className={getInputClearButtonClassName(Boolean(value))}
         aria-label="Clear"
       >
         <X size={13} />
       </button>
     </div>
+  );
+}
+
+function ImeSafeInput({
+  value,
+  onChange,
+  onBlur,
+  className,
+  placeholder,
+  ariaLabel
+}: {
+  value: string;
+  onChange: (event: { target: { value: string } }) => void;
+  onBlur?: () => void;
+  className: string;
+  placeholder?: string;
+  ariaLabel?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const composingRef = useRef(false);
+
+  useEffect(() => {
+    if (!composingRef.current) {
+      setDraft(value);
+    }
+  }, [value]);
+
+  const commit = (nextValue: string) => {
+    onChange({ target: { value: nextValue } });
+  };
+
+  return (
+    <input
+      aria-label={ariaLabel}
+      value={draft}
+      placeholder={placeholder}
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={(event) => {
+        composingRef.current = false;
+        const nextValue = event.currentTarget.value;
+        setDraft(nextValue);
+        commit(nextValue);
+      }}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setDraft(nextValue);
+        if (
+          shouldCommitTextInputChange(
+            composingRef.current || Boolean((event.nativeEvent as InputEvent).isComposing)
+          )
+        ) {
+          commit(nextValue);
+        }
+      }}
+      onBlur={() => {
+        if (composingRef.current) {
+          composingRef.current = false;
+          commit(draft);
+        }
+        onBlur?.();
+      }}
+      className={className}
+    />
+  );
+}
+
+function ImeSafeTextarea({
+  value,
+  onChange,
+  className,
+  placeholder
+}: {
+  value: string;
+  onChange: (event: { target: { value: string } }) => void;
+  className: string;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const composingRef = useRef(false);
+
+  useEffect(() => {
+    if (!composingRef.current) {
+      setDraft(value);
+    }
+  }, [value]);
+
+  const commit = (nextValue: string) => {
+    onChange({ target: { value: nextValue } });
+  };
+
+  return (
+    <textarea
+      value={draft}
+      placeholder={placeholder}
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={(event) => {
+        composingRef.current = false;
+        const nextValue = event.currentTarget.value;
+        setDraft(nextValue);
+        commit(nextValue);
+      }}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setDraft(nextValue);
+        if (
+          shouldCommitTextInputChange(
+            composingRef.current || Boolean((event.nativeEvent as InputEvent).isComposing)
+          )
+        ) {
+          commit(nextValue);
+        }
+      }}
+      onBlur={() => {
+        if (composingRef.current) {
+          composingRef.current = false;
+          commit(draft);
+        }
+      }}
+      className={className}
+    />
   );
 }
 
@@ -1994,11 +2918,11 @@ function StatusBadge({
     ? t("matched")
     : paused
       ? t("paused")
-      : `${t("notMatched")}：${formatDiagnosticMessage(diagnostics, language)}`;
+      : formatDiagnosticMessage(diagnostics, language);
   return (
     <span
       title={label}
-      className={`max-w-[300px] truncate whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${
+      className={`min-w-0 max-w-full truncate whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${
         active
           ? "bg-notion-mint text-notion-green"
           : paused
@@ -2127,6 +3051,305 @@ export function reorderEnvs(
   };
 }
 
+export function updateWorkspaceItem(
+  state: GlobalState,
+  envId: string,
+  itemId: string,
+  patch: Partial<Pick<WorkspaceItem, "type" | "title" | "value">>,
+  now = Date.now()
+): GlobalState {
+  const env = state.envs[envId];
+  if (!env) {
+    return state;
+  }
+  return {
+    ...state,
+    envs: {
+      ...state.envs,
+      [envId]: {
+        ...env,
+        workspace: {
+          ...env.workspace,
+          items: env.workspace.items.map((item) =>
+            item.id === itemId ? { ...item, ...patch, updatedAt: now } : item
+          )
+        },
+        updatedAt: now
+      }
+    }
+  };
+}
+
+export function updateGlobalWorkspaceItem(
+  state: GlobalState,
+  itemId: string,
+  patch: Partial<Pick<WorkspaceItem, "type" | "title" | "value">>,
+  now = Date.now()
+): GlobalState {
+  return {
+    ...state,
+    globalWorkspace: {
+      ...state.globalWorkspace,
+      items: state.globalWorkspace.items.map((item) =>
+        item.id === itemId ? { ...item, ...patch, updatedAt: now } : item
+      )
+    }
+  };
+}
+
+export function updateWorkspaceTodo(
+  state: GlobalState,
+  envId: string,
+  todoId: string,
+  patch: Partial<Pick<WorkspaceTodo, "title" | "done">>,
+  now = Date.now()
+): GlobalState {
+  const env = state.envs[envId];
+  if (!env) {
+    return state;
+  }
+  return {
+    ...state,
+    envs: {
+      ...state.envs,
+      [envId]: {
+        ...env,
+        workspace: {
+          ...env.workspace,
+          todos: env.workspace.todos.map((todo) =>
+            todo.id === todoId ? { ...todo, ...patch, updatedAt: now } : todo
+          )
+        },
+        updatedAt: now
+      }
+    }
+  };
+}
+
+export function reorderWorkspaceItems(
+  state: GlobalState,
+  envId: string,
+  draggedItemId: string,
+  targetItemId: string
+): GlobalState {
+  const env = state.envs[envId];
+  if (!env) {
+    return state;
+  }
+  const items = reorderRows(env.workspace.items, draggedItemId, targetItemId);
+  if (items === env.workspace.items) {
+    return state;
+  }
+  return {
+    ...state,
+    envs: {
+      ...state.envs,
+      [envId]: {
+        ...env,
+        workspace: { ...env.workspace, items },
+        updatedAt: Date.now()
+      }
+    }
+  };
+}
+
+export function reorderWorkspaceTodos(
+  state: GlobalState,
+  envId: string,
+  draggedTodoId: string,
+  targetTodoId: string
+): GlobalState {
+  const env = state.envs[envId];
+  if (!env) {
+    return state;
+  }
+  const todos = reorderRows(env.workspace.todos, draggedTodoId, targetTodoId);
+  if (todos === env.workspace.todos) {
+    return state;
+  }
+  return {
+    ...state,
+    envs: {
+      ...state.envs,
+      [envId]: {
+        ...env,
+        workspace: { ...env.workspace, todos },
+        updatedAt: Date.now()
+      }
+    }
+  };
+}
+
+function reorderRows<T extends { id: string }>(
+  rows: T[],
+  draggedId: string,
+  targetId: string
+): T[] {
+  if (draggedId === targetId) {
+    return rows;
+  }
+  const draggedIndex = rows.findIndex((row) => row.id === draggedId);
+  const targetIndex = rows.findIndex((row) => row.id === targetId);
+  if (draggedIndex < 0 || targetIndex < 0) {
+    return rows;
+  }
+  const nextRows = rows.filter((row) => row.id !== draggedId);
+  nextRows.splice(targetIndex, 0, rows[draggedIndex]);
+  return nextRows;
+}
+
+function moveRow<T extends { id: string }>(
+  rows: T[],
+  rowId: string,
+  direction: "up" | "down"
+): T[] {
+  const index = rows.findIndex((row) => row.id === rowId);
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= rows.length) {
+    return rows;
+  }
+  const nextRows = [...rows];
+  const [row] = nextRows.splice(index, 1);
+  nextRows.splice(targetIndex, 0, row);
+  return nextRows;
+}
+
+async function runWorkspaceItemAction(item: WorkspaceItem): Promise<void> {
+  const value = item.value.trim();
+  if (!value) {
+    return;
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+  }
+}
+
+function openWorkspaceItemLink(value: string): void {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return;
+  }
+  window.open(normalizeWorkspaceUrl(trimmedValue), "_blank", "noopener");
+}
+
+export function getInitialEnvDetailTab(tab?: string): EnvDetailTab {
+  return tab === "workspace" ? "workspace" : "rules";
+}
+
+export function readEnvDetailTab(storage: Storage | undefined = safeLocalStorage()): EnvDetailTab | undefined {
+  const tab = storage?.getItem(ENV_DETAIL_TAB_STORAGE_KEY);
+  return tab === "workspace" || tab === "rules" ? tab : undefined;
+}
+
+export function writeEnvDetailTab(
+  tab: EnvDetailTab,
+  storage: Storage | undefined = safeLocalStorage()
+): void {
+  storage?.setItem(ENV_DETAIL_TAB_STORAGE_KEY, tab);
+}
+
+export function getEnvDetailTabs(): EnvDetailTab[] {
+  return [...ENV_DETAIL_TABS];
+}
+
+export function getEnvDetailContentClassName(): string {
+  return ENV_DETAIL_CONTENT_CLASS_NAME;
+}
+
+export function getHeaderControlsClassName(): string {
+  return HEADER_CONTROLS_CLASS_NAME;
+}
+
+export function getInputClearButtonClassName(
+  hasValue: boolean,
+  rightClassName = "right-1"
+): string {
+  return `${INPUT_CLEAR_BUTTON_CLASS_NAME} ${rightClassName} ${
+    hasValue ? "" : "pointer-events-none"
+  }`.trim();
+}
+
+export function getWorkspaceItemRowClassName(isDragging: boolean): string {
+  return `group grid grid-cols-[18px_minmax(72px,0.36fr)_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border border-notion-hairline bg-notion-soft px-2 py-1.5 transition hover:bg-white ${
+    isDragging ? "opacity-45" : ""
+  }`.trim();
+}
+
+export function getWorkspaceItemDragHandleClassName(): string {
+  return "grid h-7 w-[18px] shrink-0 cursor-grab place-items-center rounded text-notion-steel opacity-0 transition hover:bg-notion-surface active:cursor-grabbing group-hover:opacity-100 group-focus-within:opacity-100";
+}
+
+export function getWorkspaceItemActionButtonClassName(
+  action: "copy" | "open" | "delete",
+  active: boolean
+): string {
+  const tone =
+    action === "delete"
+      ? "border-transparent text-red-600 hover:border-red-200 hover:bg-red-50"
+      : active
+        ? "text-emerald-600 border-emerald-200 bg-emerald-50"
+        : "border-transparent text-notion-primary hover:border-notion-hairline hover:bg-white";
+  return `rounded border p-1.5 transition ${tone}`;
+}
+
+export function getWorkspaceItemCopyLabel(
+  copied: boolean,
+  copyLabel: string,
+  copiedLabel: string
+): string {
+  return copied ? copiedLabel : copyLabel;
+}
+
+export function shouldCommitTextInputChange(isComposing: boolean): boolean {
+  return !isComposing;
+}
+
+export function shouldCloseDropdownOnDocumentClick({
+  open,
+  targetInside
+}: {
+  open: boolean;
+  targetInside: boolean;
+}): boolean {
+  return open && !targetInside;
+}
+
+export function isEnvSettingsTab(tab: EnvDetailTab): boolean {
+  return tab === "rules";
+}
+
+export function getWorkspaceItemAddTypes(): Array<WorkspaceItem["type"]> {
+  return ["text"];
+}
+
+export function getWorkspaceItemActions(value: string): Array<"copy" | "open"> {
+  return isWorkspaceValueLink(value) ? ["copy", "open"] : ["copy"];
+}
+
+export function isWorkspaceValueLink(value: string): boolean {
+  const trimmedValue = value.trim();
+  if (!trimmedValue || /\s/.test(trimmedValue)) {
+    return false;
+  }
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    return true;
+  }
+  if (/^(localhost|127(?:\.\d{1,3}){3})(?::\d+)?(?:[/?#].*)?$/i.test(trimmedValue)) {
+    return true;
+  }
+  return /^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?(?:[/?#].*)?$/i.test(trimmedValue);
+}
+
+function normalizeWorkspaceUrl(value: string): string {
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+  if (/^(localhost|127(?:\.\d{1,3}){3})(?::\d+)?(?:[/?#].*)?$/i.test(value)) {
+    return `http://${value}`;
+  }
+  return `https://${value}`;
+}
+
 function splitList(value: string): string[] {
   return value
     .split(",")
@@ -2173,41 +3396,37 @@ function formatDiagnosticMessage(diagnostics: MatchDiagnostics, language: Langua
     return diagnostics.message;
   }
   if (diagnostics.status === "paused") {
-    return "The extension is paused. Rules will not be injected.";
+    return "Paused";
   }
   if (diagnostics.status === "no-tab") {
-    return "Unable to read the current tab.";
+    return "No tab access";
   }
   if (diagnostics.status === "no-group") {
-    return "The current tab is not in a tab group.";
+    return "No tab group";
   }
   if (diagnostics.status === "no-env") {
-    return "No env is bound to the current tab group.";
+    return "No env bound";
   }
   if (diagnostics.status === "env-disabled") {
-    return "The current env is disabled.";
+    return "Env disabled";
   }
   if (diagnostics.status === "no-domain") {
-    return "This env has no domain filter, so it cannot be enabled.";
+    return "No domain filter";
   }
   if (diagnostics.status === "not-matched") {
-    return diagnostics.excluded
-      ? "The current page matches an excluded domain."
-      : "The current page is outside the filter scope.";
+    return diagnostics.excluded ? "Excluded domain" : "Outside filters";
   }
-  return "The current page will apply env rules.";
+  return "Matched";
 }
 
 function readLanguage(): Language {
-  if (typeof localStorage === "undefined") {
-    return "zh";
-  }
-  return localStorage.getItem(LANGUAGE_STORAGE_KEY) === "en" ? "en" : "zh";
+  return safeLocalStorage()?.getItem(LANGUAGE_STORAGE_KEY) === "en" ? "en" : "zh";
 }
 
 function writeLanguage(language: Language) {
-  if (typeof localStorage === "undefined") {
-    return;
-  }
-  localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  safeLocalStorage()?.setItem(LANGUAGE_STORAGE_KEY, language);
+}
+
+function safeLocalStorage(): Storage | undefined {
+  return typeof localStorage === "undefined" ? undefined : localStorage;
 }

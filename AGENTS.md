@@ -2,7 +2,7 @@
 
 此仓库为 AI 编码 agent 维护 durable project knowledge。
 
-Latest project memory update: 2026-05-19
+Latest project memory update: 2026-05-22
 
 修改代码前，读取与任务相关的文件：
 

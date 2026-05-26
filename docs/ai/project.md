@@ -49,6 +49,8 @@ MVP 暂不包含：
 - 创建和应用用户自定义模板，模板可一次性生成过滤条件和请求头；模板请求头可配置应用时从当前页面读取值。
 - 将一个 Env 绑定到一个或多个 Chrome Tab Group。
 - Env 可以按 Tab Group 生效，也可以配置为全局生效、与 Tab Group 无关。
+- Env Workspace 可记录当前环境常用的片段、待办和备注。
+- Global Workspace 可记录跨所有 Env 展示的全局片段。
 - 根据 Env 生效范围和过滤器为请求注入 Headers，并用 Replace 语义改写 Query。
 - 通过 Domain / Path / Excluded Domain 限定规则生效范围。
 - 支持暂停插件和关闭详情自动切换。
@@ -57,6 +59,7 @@ MVP 暂不包含：
 ## Main Modules
 
 - Popup UI：Env 列表、详情、规则编辑和状态展示。
+- Side Panel UI：长驻 Env 工作台，复用 Env 详情能力并使用更适合窄长面板的布局。
 - Options UI：独立配置页面，当前复用 Popup 体验并承载模板管理入口。
 - Background Service Worker：监听 Chrome 事件，刷新动态规则。
 - Chrome API 封装：隔离 `chrome.tabs`、`chrome.tabGroups`、`chrome.storage.local`、`chrome.declarativeNetRequest`。
@@ -72,6 +75,8 @@ MVP 暂不包含：
 - Env Template：用户维护的模板，保存过滤条件和请求头，应用后复制为普通 Env 配置；请求头值可配置应用时通过 XPath 或 CSS 从当前页面读取。
 - Query Rule：用 Chrome DNR queryTransform 的 addOrReplaceParams 实现 Replace，参数缺失则新增，已存在则替换。
 - Filter：限制 Env 生效范围的 Domain、Path 和 Excluded Domain 配置。
+- Env Workspace：挂在 Env 上的用户辅助信息，包括可复制或打开的片段、待办和备注；不参与请求规则编译。
+- Global Workspace：挂在 GlobalState 上的用户辅助信息，当前只包含全局片段；在任意 Env 的 Workspace tab 中展示，不参与请求规则编译。
 
 ## Open Questions
 

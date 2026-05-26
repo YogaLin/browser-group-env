@@ -29,6 +29,7 @@ Chrome Profile
 ## Main Components
 
 - `entrypoints/popup/*`：插件 Popup 入口，只处理 UI 和用户操作。
+- `entrypoints/sidepanel/*`：Chrome Side Panel 入口，作为长驻 Env 工作台，适合编辑规则和 Workspace。
 - `entrypoints/options/*`：插件独立配置页入口，当前复用 Popup UI，用于从 popup 打开模板管理等较重配置。
 - `entrypoints/background.ts`：Background service worker，处理 Chrome 事件、状态同步和 DNR 编译调用。
 - `src/extension/*`：Chrome API 封装，避免 UI 直接调用 `chrome.*`。
@@ -46,6 +47,20 @@ User edits Env in Popup
   -> compile Env filters and Header rules
   -> update declarativeNetRequest session rules
   -> matching requests receive headers
+```
+
+编辑 Workspace 时：
+
+```text
+User edits global snippets in Popup or Side Panel
+  -> save GlobalState.globalWorkspace.items to chrome.storage.local
+  -> background may refresh from storage change
+  -> DNR compiler ignores workspace data
+
+User edits env snippets / todos / notes in Popup or Side Panel
+  -> save Env.workspace to chrome.storage.local
+  -> background may refresh from storage change
+  -> DNR compiler ignores workspace data
 ```
 
 应用模板时：
@@ -81,6 +96,7 @@ Active -> Paused
 - Chrome `storage.local`：保存 Env、绑定关系和全局配置。
 - Chrome `declarativeNetRequest`：按 Tab IDs 和 URL 条件修改请求 Header。
 - Chrome `scripting`：仅在应用模板时读取当前页面 DOM，用于解析模板请求头的 XPath / CSS 动态值。
+- Chrome `sidePanel`：从 Popup 打开长驻工作台，保留 Popup 作为轻量入口。
 
 第一版不依赖 Codex Chrome Extension 内部能力，不实现后端服务。
 
@@ -88,6 +104,7 @@ Active -> Paused
 
 - Header 注入必须统一由 Background service worker 的 DNR 编译逻辑负责。
 - Popup 不直接操作 DNR rule，只提交配置变更。
+- Env Workspace 和 Global Workspace 只属于 UI 辅助数据，不应进入 DNR 编译、模板运行时规则或 Header/Query 生效判断。
 - `src/model/*` 应保持可测试，不依赖 Chrome runtime。
 - Codex Skill 若后续加入，只作为外部触发入口，不直接实现 Header 注入。
 

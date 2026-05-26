@@ -144,6 +144,28 @@ export async function openTemplateManagerPage(): Promise<void> {
   window.open(`/${path}`, "_blank", "noopener");
 }
 
+export async function openSidePanel(): Promise<void> {
+  if (typeof chrome === "undefined") {
+    window.open("/sidepanel.html", "_blank", "noopener");
+    return;
+  }
+
+  if (chrome.sidePanel?.open) {
+    const [tab] = chrome.tabs?.query
+      ? await chrome.tabs.query({ active: true, currentWindow: true })
+      : [];
+    await chrome.sidePanel.open({ windowId: tab?.windowId });
+    return;
+  }
+
+  const url = chrome.runtime?.getURL ? chrome.runtime.getURL("sidepanel.html") : "/sidepanel.html";
+  if (chrome.tabs?.create) {
+    await chrome.tabs.create({ url });
+    return;
+  }
+  window.open(url, "_blank", "noopener");
+}
+
 export async function resolveTemplateDynamicValues(
   template: EnvTemplate,
   sourceTabId?: number

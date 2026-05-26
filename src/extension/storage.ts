@@ -65,5 +65,9 @@ function loadPreviewState(): GlobalState {
 }
 
 function needsMigration(state: GlobalState): boolean {
-  return !("templates" in state);
+  return (
+    !("templates" in state) ||
+    !("globalWorkspace" in state) ||
+    Object.values(state.envs ?? {}).some((env) => !("workspace" in env))
+  );
 }

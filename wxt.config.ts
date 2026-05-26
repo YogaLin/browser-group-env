@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: "Browser Group Env",
     description: "Bind Chrome Tab Groups to development environment rules.",
-    permissions: ["tabs", "tabGroups", "storage", "declarativeNetRequest", "scripting"],
+    permissions: ["tabs", "tabGroups", "storage", "declarativeNetRequest", "scripting", "sidePanel"],
     host_permissions: ["<all_urls>"],
     icons: {
       "16": "icon/16.png",
@@ -26,6 +26,9 @@ export default defineConfig({
     options_ui: {
       page: "options.html",
       open_in_tab: true
+    },
+    side_panel: {
+      default_path: "sidepanel.html"
     }
   }
 });
