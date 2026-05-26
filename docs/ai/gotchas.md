@@ -44,6 +44,8 @@ Workspace 片段在 UI 上不要区分文本、链接、命令；片段只展示
 
 Workspace 片段可以填写可选 name，对应模型字段 `WorkspaceItem.title`。空 name 是合法状态，sanitize 时必须保留为空，不要自动补成“新片段”之类的默认标题。
 
+Workspace 片段排序使用行首 hover/focus 后显示的拖拽手柄；片段行不展示上下移动按钮。Todo 的上下移动按钮是独立交互，不要因为片段改成拖拽排序而一并移除。
+
 Popup 和 Side Panel 共享同一份 Env Workspace 和 Global Workspace。Popup 可以完整编辑，但 Side Panel 是更适合长时间打开和窄长布局的工作台；不要为了 Side Panel 复制一套独立数据模型。
 
 Background 刷新 DNR 规则时不能用刷新开始时读取的旧 state 整体写回 storage，否则会覆盖 Popup / Side Panel 同时新增的 workspace items、todos 或 notes。写回规则刷新结果前应重新读取最新 state，并只合并规则刷新产物，例如 `ruleMeta`、reconciled `groupBindings` 和 Env 的 `linkedGroupKeys`。

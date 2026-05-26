@@ -131,6 +131,7 @@ type MessageKey =
   | "emptyWorkspaceItems"
   | "emptyTodos"
   | "copyValue"
+  | "copiedValue"
   | "openLink"
   | "moveUp"
   | "moveDown"
@@ -156,7 +157,6 @@ type MessageKey =
   | "tabGroup"
   | "matched"
   | "paused"
-  | "notMatched"
   | "newEnv";
 
 const MESSAGES: Record<Language, Record<MessageKey, string>> = {
@@ -228,6 +228,7 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     emptyWorkspaceItems: "暂无片段，添加后可快速复制；检测到链接时可直接打开。",
     emptyTodos: "暂无待办。",
     copyValue: "复制",
+    copiedValue: "已复制",
     openLink: "打开",
     moveUp: "上移",
     moveDown: "下移",
@@ -253,7 +254,6 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     tabGroup: "标签组",
     matched: "已命中",
     paused: "已暂停",
-    notMatched: "未命中",
     newEnv: "新环境"
   },
   en: {
@@ -324,6 +324,7 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     emptyWorkspaceItems: "No snippets yet. Add a value to copy it, or open it when it looks like a link.",
     emptyTodos: "No todos yet.",
     copyValue: "Copy",
+    copiedValue: "Copied",
     openLink: "Open",
     moveUp: "Move up",
     moveDown: "Move down",
@@ -349,7 +350,6 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     tabGroup: "Tab Group",
     matched: "Matched",
     paused: "Paused",
-    notMatched: "Not matched",
     newEnv: "New Env"
   }
 };
@@ -1949,10 +1949,10 @@ function WorkspaceCard({
               items: current.items.filter((item) => item.id !== itemId)
             }))
           }
-          onMove={(itemId, direction) =>
+          onReorder={(draggedItemId, targetItemId) =>
             void onUpdateGlobalWorkspace((current) => ({
               ...current,
-              items: moveRow(current.items, itemId, direction)
+              items: reorderRows(current.items, draggedItemId, targetItemId)
             }))
           }
         />
@@ -1981,12 +1981,12 @@ function WorkspaceCard({
               }
             }))
           }
-          onMove={(itemId, direction) =>
+          onReorder={(draggedItemId, targetItemId) =>
             void onUpdateEnv((current) => ({
               ...current,
               workspace: {
                 ...current.workspace,
-                items: moveRow(current.workspace.items, itemId, direction)
+                items: reorderRows(current.workspace.items, draggedItemId, targetItemId)
               }
             }))
           }
@@ -2057,7 +2057,7 @@ function WorkspaceItems({
   onAddItem,
   onChange,
   onDelete,
-  onMove
+  onReorder
 }: {
   title: string;
   items: WorkspaceItem[];
@@ -2065,8 +2065,45 @@ function WorkspaceItems({
   onAddItem: () => void;
   onChange: (itemId: string, patch: Partial<Pick<WorkspaceItem, "title" | "value">>) => void;
   onDelete: (itemId: string) => void;
-  onMove: (itemId: string, direction: "up" | "down") => void;
+  onReorder: (draggedItemId: string, targetItemId: string) => void;
 }) {
+  const [draggingItemId, setDraggingItemId] = useState<string>();
+  const [copiedItemId, setCopiedItemId] = useState<string>();
+  const copiedTimerRef = useRef<number>();
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+    },
+    []
+  );
+
+  const handleDrop = (event: React.DragEvent, targetItemId: string) => {
+    event.preventDefault();
+    const draggedItemId =
+      event.dataTransfer.getData("application/x-browser-group-workspace-item-id") ||
+      draggingItemId;
+    setDraggingItemId(undefined);
+    if (!draggedItemId || draggedItemId === targetItemId) {
+      return;
+    }
+    onReorder(draggedItemId, targetItemId);
+  };
+
+  const handleCopy = async (item: WorkspaceItem) => {
+    if (!item.value.trim()) {
+      return;
+    }
+    await runWorkspaceItemAction(item);
+    setCopiedItemId(item.id);
+    if (copiedTimerRef.current) {
+      window.clearTimeout(copiedTimerRef.current);
+    }
+    copiedTimerRef.current = window.setTimeout(() => setCopiedItemId(undefined), 1200);
+  };
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -2083,73 +2120,88 @@ function WorkspaceItems({
         </button>
       </div>
       {items.length ? (
-        <div className="space-y-2">
-          {items.map((item, index) => {
+        <div className="space-y-1.5">
+          {items.map((item) => {
             const actions = getWorkspaceItemActions(item.value);
+            const isCopied = copiedItemId === item.id;
+            const copyLabel = getWorkspaceItemCopyLabel(
+              isCopied,
+              t("copyValue"),
+              t("copiedValue")
+            );
             return (
               <div
                 key={item.id}
-                className="rounded-md border border-notion-hairline bg-notion-soft p-2"
+                onDragOver={(event) => {
+                  if (draggingItemId && draggingItemId !== item.id) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }
+                }}
+                onDrop={(event) => handleDrop(event, item.id)}
+                className={getWorkspaceItemRowClassName(draggingItemId === item.id)}
               >
-                <div className="space-y-1.5">
+                <span
+                  className={getWorkspaceItemDragHandleClassName()}
+                  draggable
+                  onDragStart={(event) => {
+                    setDraggingItemId(item.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData(
+                      "application/x-browser-group-workspace-item-id",
+                      item.id
+                    );
+                  }}
+                  onDragEnd={() => setDraggingItemId(undefined)}
+                  title={t("dragEnv")}
+                  aria-hidden="true"
+                >
+                  <GripVertical size={14} />
+                </span>
+                <div className="min-w-0">
                   <RuleInput
                     value={item.title}
                     placeholder={t("snippetNamePlaceholder")}
                     onChange={(title) => onChange(item.id, { title })}
                   />
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                    <RuleInput
+                </div>
+                <div className="min-w-0">
+                  <RuleInput
                     value={item.value}
                     placeholder={t("itemValuePlaceholder")}
                     onChange={(value) => onChange(item.id, { value })}
-                    />
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => void runWorkspaceItemAction(item)}
-                        className="rounded p-1.5 text-notion-primary transition hover:bg-white"
-                        title={t("copyValue")}
-                      >
-                        <Copy size={15} />
-                      </button>
-                      {actions.includes("open") ? (
-                        <button
-                          type="button"
-                          onClick={() => openWorkspaceItemLink(item.value)}
-                          className="rounded p-1.5 text-notion-primary transition hover:bg-white"
-                          title={t("openLink")}
-                        >
-                          <ExternalLink size={15} />
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => onMove(item.id, "up")}
-                        disabled={index === 0}
-                        className="rounded p-1.5 text-notion-steel transition hover:bg-white disabled:opacity-35"
-                        title={t("moveUp")}
-                      >
-                        <ArrowUp size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onMove(item.id, "down")}
-                        disabled={index === items.length - 1}
-                        className="rounded p-1.5 text-notion-steel transition hover:bg-white disabled:opacity-35"
-                        title={t("moveDown")}
-                      >
-                        <ArrowDown size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(item.id)}
-                        className="rounded p-1.5 text-red-600 transition hover:bg-red-50"
-                        title={t("delete")}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
+                  />
+                </div>
+                <div className="flex shrink-0 items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopy(item)}
+                    className={getWorkspaceItemActionButtonClassName("copy", isCopied)}
+                    title={copyLabel}
+                    aria-label={copyLabel}
+                  >
+                    {isCopied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+                  </button>
+                  {actions.includes("open") ? (
+                    <button
+                      type="button"
+                      onClick={() => openWorkspaceItemLink(item.value)}
+                      className={getWorkspaceItemActionButtonClassName("open", false)}
+                      title={t("openLink")}
+                      aria-label={t("openLink")}
+                    >
+                      <ExternalLink size={15} />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onDelete(item.id)}
+                    className={getWorkspaceItemActionButtonClassName("delete", false)}
+                    title={t("delete")}
+                    aria-label={t("delete")}
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               </div>
             );
@@ -3215,6 +3267,37 @@ export function getInputClearButtonClassName(
   return `${INPUT_CLEAR_BUTTON_CLASS_NAME} ${rightClassName} ${
     hasValue ? "" : "pointer-events-none"
   }`.trim();
+}
+
+export function getWorkspaceItemRowClassName(isDragging: boolean): string {
+  return `group grid grid-cols-[18px_minmax(72px,0.36fr)_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border border-notion-hairline bg-notion-soft px-2 py-1.5 transition hover:bg-white ${
+    isDragging ? "opacity-45" : ""
+  }`.trim();
+}
+
+export function getWorkspaceItemDragHandleClassName(): string {
+  return "grid h-7 w-[18px] shrink-0 cursor-grab place-items-center rounded text-notion-steel opacity-0 transition hover:bg-notion-surface active:cursor-grabbing group-hover:opacity-100 group-focus-within:opacity-100";
+}
+
+export function getWorkspaceItemActionButtonClassName(
+  action: "copy" | "open" | "delete",
+  active: boolean
+): string {
+  const tone =
+    action === "delete"
+      ? "border-transparent text-red-600 hover:border-red-200 hover:bg-red-50"
+      : active
+        ? "text-emerald-600 border-emerald-200 bg-emerald-50"
+        : "border-transparent text-notion-primary hover:border-notion-hairline hover:bg-white";
+  return `rounded border p-1.5 transition ${tone}`;
+}
+
+export function getWorkspaceItemCopyLabel(
+  copied: boolean,
+  copyLabel: string,
+  copiedLabel: string
+): string {
+  return copied ? copiedLabel : copyLabel;
 }
 
 export function shouldCommitTextInputChange(isComposing: boolean): boolean {

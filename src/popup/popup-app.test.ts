@@ -8,6 +8,10 @@ import {
   getInitialEnvDetailTab,
   getHeaderControlsClassName,
   getInputClearButtonClassName,
+  getWorkspaceItemActionButtonClassName,
+  getWorkspaceItemCopyLabel,
+  getWorkspaceItemDragHandleClassName,
+  getWorkspaceItemRowClassName,
   getWorkspaceItemAddTypes,
   getWorkspaceItemActions,
   shouldCloseDropdownOnDocumentClick,
@@ -288,9 +292,29 @@ describe("popup state helpers", () => {
     expect(getWorkspaceItemAddTypes()).toEqual(["text"]);
   });
 
+  it("uses compact draggable rows for workspace snippets", () => {
+    expect(getWorkspaceItemRowClassName(false).split(/\s+/)).toContain("grid");
+    expect(getWorkspaceItemRowClassName(true).split(/\s+/)).toContain("opacity-45");
+
+    const dragHandleClassNames = getWorkspaceItemDragHandleClassName().split(/\s+/);
+    expect(dragHandleClassNames).toContain("opacity-0");
+    expect(dragHandleClassNames).toContain("group-hover:opacity-100");
+    expect(dragHandleClassNames).toContain("group-focus-within:opacity-100");
+  });
+
   it("shows copy for every workspace item and open only for link-like values", () => {
     expect(getWorkspaceItemActions("npm run test")).toEqual(["copy"]);
     expect(getWorkspaceItemActions("example.com/debug")).toEqual(["copy", "open"]);
+  });
+
+  it("uses bordered hover styling and copied feedback for workspace copy buttons", () => {
+    const classNames = getWorkspaceItemActionButtonClassName("copy", false).split(/\s+/);
+
+    expect(classNames).toContain("border");
+    expect(classNames).toContain("border-transparent");
+    expect(classNames).toContain("hover:border-notion-hairline");
+    expect(getWorkspaceItemCopyLabel(false, "Copy", "Copied")).toBe("Copy");
+    expect(getWorkspaceItemCopyLabel(true, "Copy", "Copied")).toBe("Copied");
   });
 
   it("keeps popup header controls on one line because status text truncates first", () => {
