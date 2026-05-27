@@ -96,6 +96,9 @@ type MessageKey =
   | "deleteActiveConfirm"
   | "deleteConfirm"
   | "confirmDeleteTitle"
+  | "confirmManualSwitchTitle"
+  | "manualSwitchConfirm"
+  | "switchToManual"
   | "cancel"
   | "alwaysOn"
   | "copy"
@@ -193,6 +196,9 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     deleteActiveConfirm: "当前环境绑定了正在使用的标签组。删除后该组将不再注入规则，确认删除？",
     deleteConfirm: "确认删除当前环境？",
     confirmDeleteTitle: "删除环境",
+    confirmManualSwitchTitle: "切换为手动模式",
+    manualSwitchConfirm: "当前处于自动模式。手动切换环境会关闭自动模式，并改为手动模式。",
+    switchToManual: "切换",
     cancel: "取消",
     alwaysOn: "始终生效",
     copy: "复制",
@@ -289,6 +295,9 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     deleteActiveConfirm: "This env is bound to the active tab group. Deleting it will stop rule injection for that group. Continue?",
     deleteConfirm: "Delete this env?",
     confirmDeleteTitle: "Delete Env",
+    confirmManualSwitchTitle: "Switch to Manual",
+    manualSwitchConfirm: "Auto mode is active. Manually switching envs will turn Auto off and use Manual mode.",
+    switchToManual: "Switch",
     cancel: "Cancel",
     alwaysOn: "Always on",
     copy: "Copy",
@@ -391,6 +400,7 @@ export function PopupApp({
   const [language, setLanguage] = useState<Language>(() => readLanguage());
   const [templateManagerOpen, setTemplateManagerOpen] = useState(templateManagerInitialOpen);
   const [pendingDeleteEnvId, setPendingDeleteEnvId] = useState<string>();
+  const [pendingManualSwitchEnvId, setPendingManualSwitchEnvId] = useState<string>();
   const [draftLists, setDraftLists] = useState<DraftLists>({
     domains: "",
     paths: "",
@@ -455,6 +465,9 @@ export function PopupApp({
     });
   }, []);
   const pendingDeleteEnv = pendingDeleteEnvId ? state?.envs[pendingDeleteEnvId] : undefined;
+  const pendingManualSwitchEnv = pendingManualSwitchEnvId
+    ? state?.envs[pendingManualSwitchEnvId]
+    : undefined;
   const pendingDeleteActiveBound = Boolean(
     pendingDeleteEnvId &&
       context.groupKey &&
@@ -496,6 +509,30 @@ export function PopupApp({
       });
     },
     [mutateState, selectedEnv]
+  );
+
+  const applyManualEnvSelect = useCallback(
+    (envId: string) => {
+      void mutateState((current) => selectEnvManually(current, envId));
+    },
+    [mutateState]
+  );
+
+  const requestSelectEnv = useCallback(
+    (envId: string) => {
+      if (
+        shouldConfirmManualEnvSwitch({
+          autoSwitch: Boolean(state?.autoSwitch),
+          selectedEnvId: selectedEnv?.id,
+          nextEnvId: envId
+        })
+      ) {
+        setPendingManualSwitchEnvId(envId);
+        return;
+      }
+      applyManualEnvSelect(envId);
+    },
+    [applyManualEnvSelect, selectedEnv?.id, state?.autoSwitch]
   );
 
   const envs = useMemo(() => Object.values(state?.envs ?? {}), [state]);
@@ -561,9 +598,7 @@ export function PopupApp({
               envs={envs}
               selectedEnvId={selectedEnv?.id}
               t={t}
-              onSelect={(envId) =>
-                void mutateState((current) => selectEnvManually(current, envId))
-              }
+              onSelect={requestSelectEnv}
               onCreate={() =>
                 void createEnvForCurrentContext(state, context).then((next) =>
                   mutateState(() => next)
@@ -619,9 +654,7 @@ export function PopupApp({
               search={search}
               t={t}
               onSearch={setSearch}
-              onSelect={(envId) =>
-                void mutateState((current) => selectEnvManually(current, envId))
-              }
+              onSelect={requestSelectEnv}
               onReorder={(draggedEnvId, targetEnvId) =>
                 void mutateState((current) => reorderEnvs(current, draggedEnvId, targetEnvId))
               }
@@ -711,6 +744,20 @@ export function PopupApp({
               const envId = pendingDeleteEnv.id;
               setPendingDeleteEnvId(undefined);
               void mutateState((current) => deleteEnv(current, envId));
+            }}
+          />
+        ) : null}
+        {pendingManualSwitchEnv ? (
+          <ConfirmDialog
+            title={t("confirmManualSwitchTitle")}
+            message={t("manualSwitchConfirm")}
+            confirmLabel={t("switchToManual")}
+            cancelLabel={t("cancel")}
+            onCancel={() => setPendingManualSwitchEnvId(undefined)}
+            onConfirm={() => {
+              const envId = pendingManualSwitchEnv.id;
+              setPendingManualSwitchEnvId(undefined);
+              applyManualEnvSelect(envId);
             }}
           />
         ) : null}
@@ -3029,6 +3076,18 @@ export function selectEnvManually(state: GlobalState, envId: string): GlobalStat
     selectedEnvId: envId,
     autoSwitch: false
   };
+}
+
+export function shouldConfirmManualEnvSwitch({
+  autoSwitch,
+  selectedEnvId,
+  nextEnvId
+}: {
+  autoSwitch: boolean;
+  selectedEnvId?: string;
+  nextEnvId: string;
+}): boolean {
+  return autoSwitch && Boolean(selectedEnvId) && selectedEnvId !== nextEnvId;
 }
 
 export function reorderEnvs(

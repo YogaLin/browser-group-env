@@ -16,6 +16,7 @@ import {
   getWorkspaceItemActions,
   shouldCloseDropdownOnDocumentClick,
   shouldCommitTextInputChange,
+  shouldConfirmManualEnvSwitch,
   isEnvSettingsTab,
   isWorkspaceValueLink,
   readEnvDetailTab,
@@ -84,6 +85,30 @@ describe("popup state helpers", () => {
 
     expect(next.selectedEnvId).toBe(envB.id);
     expect(next.autoSwitch).toBe(false);
+  });
+
+  it("requires confirmation before switching envs while auto mode is active", () => {
+    expect(
+      shouldConfirmManualEnvSwitch({
+        autoSwitch: true,
+        selectedEnvId: "env-a",
+        nextEnvId: "env-b"
+      })
+    ).toBe(true);
+    expect(
+      shouldConfirmManualEnvSwitch({
+        autoSwitch: true,
+        selectedEnvId: "env-a",
+        nextEnvId: "env-a"
+      })
+    ).toBe(false);
+    expect(
+      shouldConfirmManualEnvSwitch({
+        autoSwitch: false,
+        selectedEnvId: "env-a",
+        nextEnvId: "env-b"
+      })
+    ).toBe(false);
   });
 
   it("reorders envs without changing selection or bindings", () => {

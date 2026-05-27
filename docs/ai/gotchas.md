@@ -22,6 +22,8 @@ HeaderRule 和 QueryRule 在数据结构中保留 `enabled` 字段以兼容 DNR 
 
 Auto Switch 只控制 Popup 当前选中的 Env 是否跟随 active tab group。Header 规则生效应由 Env 绑定、启用状态和过滤器决定，不应依赖 Popup 当前选中项。
 
+Auto Switch 开启时，用户如果从 Env 列表或 Side Panel 下拉中手动切换到另一个 Env，必须先确认。确认后才调用手动选择逻辑并关闭 Auto Switch；取消时不得改变当前 Env 或自动模式状态。
+
 ## Env 列表顺序依赖持久化顺序
 
 Popup 支持拖动 Env 排序。当前 MVP 没有单独的 `envOrder` 字段，列表顺序依赖 `GlobalState.envs` 的对象插入顺序；因此重写 `envs` 时必须保留或有意调整顺序，不要无意排序 key。
