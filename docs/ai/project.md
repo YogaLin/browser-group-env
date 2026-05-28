@@ -52,7 +52,7 @@ MVP 暂不包含：
 - Env Workspace 可记录当前环境常用的片段、待办和备注。
 - Global Workspace 可记录跨所有 Env 展示的全局片段。
 - 根据 Env 生效范围和过滤器为请求注入 Headers，并用 Replace 语义改写 Query。
-- 通过 Domain / Path / Excluded Domain 限定规则生效范围。
+- 通过 Domain / Path / Excluded Domain 限定规则生效范围；Domain 为空时不按域名过滤。
 - 支持暂停插件和关闭详情自动切换。
 - 支持 Env 复制和删除。
 

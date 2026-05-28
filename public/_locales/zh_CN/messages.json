@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "Browser Group Env",
+    "description": "显示在 Chrome 和 Chrome 应用商店中的扩展名称。"
+  },
+  "extDescription": {
+    "message": "将 Chrome 标签组绑定到开发环境规则。",
+    "description": "显示在 Chrome 和 Chrome 应用商店中的扩展简短说明。"
+  }
+}

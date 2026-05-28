@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "Browser Group Env",
+    "description": "Extension name shown in Chrome and Chrome Web Store."
+  },
+  "extDescription": {
+    "message": "Bind Chrome Tab Groups to development environment rules.",
+    "description": "Short extension description shown in Chrome and Chrome Web Store."
+  }
+}

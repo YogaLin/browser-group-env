@@ -182,7 +182,7 @@ export function createEnv({
   return {
     id,
     name: name.trim() || "新环境",
-    enabled: false,
+    enabled: true,
     scope: "group",
     linkedGroupKeys: groupKey ? [groupKey] : [],
     filters: {
@@ -357,17 +357,17 @@ export function isEnvEmptyForTemplate(env: Env): boolean {
 }
 
 export function sanitizeEnv(env: Env): Env {
-  const hasDomains = env.filters.domains.some((domain) => domain.trim());
+  const filters = {
+    domains: cleanList(env.filters.domains),
+    paths: cleanList(env.filters.paths),
+    excludedDomains: cleanList(env.filters.excludedDomains)
+  };
   return {
     ...env,
     scope: env.scope ?? "group",
-    enabled: env.enabled && hasDomains,
+    enabled: filters.domains.length === 0 ? true : (env.enabled ?? true),
     name: env.name.trim() || "新环境",
-    filters: {
-      domains: cleanList(env.filters.domains),
-      paths: cleanList(env.filters.paths),
-      excludedDomains: cleanList(env.filters.excludedDomains)
-    },
+    filters,
     rules: {
       headers: env.rules.headers
         .map((rule) => ({
@@ -376,8 +376,7 @@ export function sanitizeEnv(env: Env): Env {
           name: rule.name.trim(),
           value: rule.value.trim(),
           valueSource: undefined
-        }))
-        .filter((rule) => rule.name),
+        })),
       queries: env.rules.queries
         .map((rule) => ({
           ...rule,
@@ -385,7 +384,6 @@ export function sanitizeEnv(env: Env): Env {
           key: rule.key.trim(),
           value: rule.value.trim()
         }))
-        .filter((rule) => rule.key)
     },
     workspace: sanitizeWorkspace(env.workspace)
   };

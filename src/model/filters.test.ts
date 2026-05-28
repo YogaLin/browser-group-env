@@ -30,4 +30,19 @@ describe("filters", () => {
       excluded: true
     });
   });
+
+  it("treats empty domain filters as matching every domain", () => {
+    const result = matchFilters("https://any.example.org/commerce/order", {
+      domains: [],
+      paths: ["/commerce/*"],
+      excludedDomains: []
+    });
+
+    expect(result).toMatchObject({
+      matched: true,
+      matchedDomain: true,
+      matchedPath: true,
+      excluded: false
+    });
+  });
 });

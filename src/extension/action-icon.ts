@@ -43,7 +43,7 @@ export function getActionEnv(state: GlobalState, context: ActiveContext): Env | 
 }
 
 function isActionEnv(env: Env | undefined): env is Env {
-  return Boolean(env?.enabled && env.filters.domains.length > 0);
+  return Boolean(env?.enabled);
 }
 
 function createIconSet(tone: IconTone, activeColor = ACTIVE_COLOR): Record<number, ImageData> {

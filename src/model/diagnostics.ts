@@ -21,13 +21,7 @@ export function getDiagnostics(state: GlobalState, context: ActiveContext): Matc
   }
   if (!env.enabled) {
     return {
-      ...empty("env-disabled", "当前环境已禁用"),
-      envId: env.id
-    };
-  }
-  if (env.filters.domains.length === 0) {
-    return {
-      ...empty("no-domain", "环境缺少域名过滤条件，不能启用"),
+      ...empty("env-disabled", "当前环境已关闭，请在环境设置中启用"),
       envId: env.id
     };
   }

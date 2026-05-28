@@ -2,11 +2,15 @@
 
 ## Header 泄漏风险
 
-Header 注入必须受 Domain / Path / Excluded Domain 过滤器约束。没有 Domain filter 的 Env 不允许启用，避免 Header 被打到无关站点。
+Header 注入必须至少受 Env 生效范围约束：Group Env 受 Tab Group 限制，Global Env 受全局 Env 范围限制。Domain filter 为空时不是禁用状态，而是表示不按域名过滤；该 Env 的规则会对范围内所有页面生效。配置高风险 Header 时应主动填写 Domain 或 Excluded Domain，避免在整个 Tab Group 内过宽注入。
 
 ## 单条规则默认启用
 
 HeaderRule 和 QueryRule 在数据结构中保留 `enabled` 字段以兼容 DNR 编译和旧数据，但 Popup 不展示单条规则的“启用”列。保存和迁移时应把规则统一视为启用，用户通过删除规则来停用单条规则。
+
+Popup 的「新增请求头 / 查询参数」依赖空白 HeaderRule / QueryRule 作为可编辑草稿行。`sanitizeEnv` 可以 trim 字段并统一 enabled，但不能按空 `name` / `key` 删除草稿；运行时 DNR 编译和诊断计数再按有效 `name` / `key` 过滤。
+
+Domain filter 为空是合法的“不过滤域名”状态。`sanitizeEnv`、顶部状态诊断、action icon 和 DNR 编译都不能把空 Domain 当作 disabled；DNR 应生成只受 Tab Group / Global scope 限制的规则。空 Domain 且空 Path 的 DNR 条件显式使用 `urlFilter: "*"` 表达匹配所有 URL，避免规则刷新链路因为缺少可见 URL matcher 而不安装规则。旧版本可能已把空 Domain Env 持久化为 disabled，迁移时应恢复为 enabled。
 
 ## Chrome Profile 不用于任务隔离
 
@@ -34,7 +38,7 @@ Env 默认按 Tab Group 绑定生效，但也可以设置为 Global，不依赖 
 
 ## 模板不是运行时规则类型
 
-Env Template 只用于一次性生成 Env 的过滤条件和请求头。应用模板后，Env 中保存的是普通 filters 和 HeaderRule，不保存模板引用，也不在 DNR 编译阶段识别模板。新建 Env 不再默认写入当前页面 Domain filter；没有 Domain filter 时仍不允许启用注入。
+Env Template 只用于一次性生成 Env 的过滤条件和请求头。应用模板后，Env 中保存的是普通 filters 和 HeaderRule，不保存模板引用，也不在 DNR 编译阶段识别模板。新建 Env 不再默认写入当前页面 Domain filter；没有 Domain filter 时按不过滤域名处理。
 
 模板请求头可以配置应用时取值来源，例如 XPath 或 CSS selector。取值只发生在应用模板时：读取成功则写入普通 HeaderRule 的 `value`，读取失败则保留模板里的静态 fallback value。Options 页应用模板必须使用打开页面时传入的 source tab id，否则会读到配置页 DOM。
 

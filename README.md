@@ -13,7 +13,7 @@ It helps developers keep multiple tasks, branches, or preview environments separ
 - Create and edit environment configurations.
 - Bind an environment to one or more Chrome Tab Groups.
 - Mark an environment as always on, independent of Tab Groups.
-- Scope rules with explicit filters before they can affect requests.
+- Scope rules with optional domain, path, and excluded-domain filters.
 - Add request headers through Chrome Declarative Net Request rules.
 - Replace query parameters through Chrome Declarative Net Request rules.
 - Manage reusable configuration templates.
@@ -29,7 +29,7 @@ Filters define where an environment is allowed to take effect.
 - Paths: optional path patterns such as `/commerce/*` or `/api/*`.
 - Excluded domains: domains that must never be matched even if they also match the domain list.
 
-An environment without a domain filter is not allowed to inject rules. This keeps headers and query rewrites from leaking to unrelated websites.
+When the domain list is empty, the environment does not filter by domain and applies to every page in its effective scope. Use domain or excluded-domain filters for headers that should not apply across the whole tab group.
 
 ## Supported Rules
 

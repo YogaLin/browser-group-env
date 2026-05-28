@@ -1,6 +1,6 @@
 {
   "name": "browser-group-env",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Bind Chrome Tab Groups to development environment rules.",
   "license": "MIT",
   "type": "module",
@@ -17,6 +17,7 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "release": "npm run zip",
+    "release:github": "node scripts/github-release.mjs",
     "typecheck": "wxt prepare && tsc --noEmit",
     "test": "vitest run"
   },
