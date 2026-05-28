@@ -39,6 +39,37 @@ describe("action icon helpers", () => {
     expect(getActionEnv(state, { groupKey })?.id).toBe(env.id);
   });
 
+  it("uses a group env without domain filters", () => {
+    const groupKey = createGroupKey(1, 2);
+    const env = {
+      ...createEnv({ name: "Preview", groupKey, now: 1 }),
+      enabled: true,
+      filters: { domains: [], paths: [], excludedDomains: [] }
+    };
+    const state: GlobalState = {
+      enabled: true,
+      autoSwitch: true,
+      selectedEnvId: env.id,
+      envs: { [env.id]: env },
+      templates: {},
+      globalWorkspace: { items: [] },
+      groupBindings: {
+        [groupKey]: {
+          groupKey,
+          envId: env.id,
+          chromeGroupId: 2,
+          windowId: 1,
+          title: "Preview",
+          lastSeenTabUrls: [],
+          updatedAt: 1
+        }
+      },
+      ruleMeta: { activeRuleIds: [] }
+    };
+
+    expect(getActionEnv(state, { groupKey })?.id).toBe(env.id);
+  });
+
   it("does not show an env when the extension is disabled", () => {
     const env = createEnv({ name: "Preview", hostname: "example.com", now: 1 });
     const state: GlobalState = {

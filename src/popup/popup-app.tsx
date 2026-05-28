@@ -103,7 +103,6 @@ type MessageKey =
   | "alwaysOn"
   | "copy"
   | "delete"
-  | "noDomainDisabled"
   | "emptyEnvTitle"
   | "emptyEnvDescription"
   | "groupsTitle"
@@ -203,7 +202,6 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     alwaysOn: "始终生效",
     copy: "复制",
     delete: "删除",
-    noDomainDisabled: "没有域名过滤条件的环境不允许启用",
     emptyEnvTitle: "还没有环境",
     emptyEnvDescription: "新建后可绑定当前标签组，并手动配置过滤条件或应用模板。",
     groupsTitle: "标签组",
@@ -241,7 +239,7 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     domains: "域名",
     paths: "路径",
     excludedDomains: "排除域名",
-    useCurrentDomain: "当前域名",
+    useCurrentDomain: "填入当前页域名",
     rules: "规则",
     addHeader: "+ 请求头",
     addQuery: "+ 查询参数",
@@ -302,7 +300,6 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     alwaysOn: "Always on",
     copy: "Copy",
     delete: "Delete",
-    noDomainDisabled: "Envs without domain filters cannot be enabled",
     emptyEnvTitle: "No envs yet",
     emptyEnvDescription: "New envs can bind to the current tab group, then use manual filters or templates.",
     groupsTitle: "Tab Groups",
@@ -340,7 +337,7 @@ const MESSAGES: Record<Language, Record<MessageKey, string>> = {
     domains: "Domains",
     paths: "Paths",
     excludedDomains: "Excluded Domains",
-    useCurrentDomain: "Domain",
+    useCurrentDomain: "Use Current Domain",
     rules: "Rules",
     addHeader: "+ Header",
     addQuery: "+ Query",
@@ -1366,7 +1363,6 @@ function EnvDetail({
               onCommitDrafts={commitFilterDrafts}
               activeHostname={context.hostname}
               onUseCurrentHostname={useCurrentHostname}
-              disabledReason={env.filters.domains.length === 0 ? t("noDomainDisabled") : undefined}
             />
           </>
         )}
@@ -2502,6 +2498,7 @@ function RuleCard({
         action={
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() =>
                 void onUpdateEnv((current) => ({
                   ...current,
@@ -2516,6 +2513,7 @@ function RuleCard({
               {t("addHeader")}
             </button>
             <button
+              type="button"
               onClick={() =>
                 void onUpdateEnv((current) => ({
                   ...current,
@@ -3060,7 +3058,6 @@ export function deleteEnv(state: GlobalState, envId: string): GlobalState {
 
 export function selectEnvManually(state: GlobalState, envId: string): GlobalState {
   const env = state.envs[envId];
-  const shouldEnable = Boolean(env?.filters.domains.length);
   return {
     ...state,
     envs: env
@@ -3068,8 +3065,8 @@ export function selectEnvManually(state: GlobalState, envId: string): GlobalStat
           ...state.envs,
           [envId]: {
             ...env,
-            enabled: shouldEnable,
-            updatedAt: shouldEnable && !env.enabled ? Date.now() : env.updatedAt
+            enabled: true,
+            updatedAt: !env.enabled ? Date.now() : env.updatedAt
           }
         }
       : state.envs,
@@ -3467,10 +3464,10 @@ function formatDiagnosticMessage(diagnostics: MatchDiagnostics, language: Langua
     return "No env bound";
   }
   if (diagnostics.status === "env-disabled") {
-    return "Env disabled";
+    return "Env turned off";
   }
   if (diagnostics.status === "no-domain") {
-    return "No domain filter";
+    return "No domain limit";
   }
   if (diagnostics.status === "not-matched") {
     return diagnostics.excluded ? "Excluded domain" : "Outside filters";

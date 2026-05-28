@@ -17,6 +17,7 @@
 
 - Popup 面向中英文用户，新增或修改可见文案时必须同时维护中文和英文。
 - 可见文案不要散落在 JSX 中，优先放入 popup 的 i18n 字典或后续统一的文案模块。
+- Manifest 中的扩展名和简短描述使用 Chrome i18n `__MSG_...__`，对应文案维护在 `public/_locales/en/messages.json` 和 `public/_locales/zh_CN/messages.json`。
 - 状态、空态、按钮、确认弹窗、诊断原因等用户可见文本都属于 i18n 范围。
 - 示例域名、占位文案和测试数据使用 `example.com`、`example.org` 等通用保留域名，不要写入真实公司、产品或内部系统标识。
 - Popup 内的删除等确认交互使用应用内轻量弹窗，不使用浏览器原生 `confirm`。
@@ -44,7 +45,7 @@
 - UI 层不要直接散落调用 `chrome.*`，统一通过 `src/extension/*` 封装。
 - DNR session rules 只由 Background service worker 更新。
 - 全局 Paused 时必须移除插件已安装的全部动态规则，但不删除用户配置。
-- Env 没有 Domain filter 时不允许启用。
+- Env 没有 Domain filter 时表示不按域名过滤，规则会对生效范围内的所有页面生效。
 
 ## Testing
 
@@ -66,3 +67,5 @@
 - 面向公开仓库发布前，必须同时扫描当前工作树和 Git 历史中的内部域名、公司名、私有 registry、真实业务 Header、真实产品名和密钥形态字符串。
 - 如果 Git 历史曾包含内部信息，不要直接把原有历史推送到公开 GitHub；应先创建干净历史的发布分支，或明确执行历史重写后再发布。
 - `package-lock.json` 中的 `resolved` 地址必须使用公开 npm registry，不要保留公司私有 registry 地址。
+- Chrome Web Store 的类别、商店详情页说明、截图、隐私说明和分发设置不由扩展包内 i18n 自动填充；这些发布元数据维护在 `docs/release/chrome-webstore.md`。
+- GitHub Release 的 tag、标题和 zip 文件名必须从 `package.json.version` 派生；使用 `npm run release:github`，不要手写另一套 release 版本号。

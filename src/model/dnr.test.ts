@@ -21,7 +21,7 @@ describe("compileSessionRules", () => {
     ]);
   });
 
-  it("does not compile envs without domains or groups", () => {
+  it("compiles envs without domains for every page in the bound group", () => {
     const state = makeState();
     const env = Object.values(state.envs)[0];
     const withoutDomains: GlobalState = {
@@ -29,12 +29,40 @@ describe("compileSessionRules", () => {
       envs: {
         [env.id]: {
           ...env,
-          filters: { ...env.filters, domains: [] }
+          filters: { domains: [], paths: [], excludedDomains: [] }
         }
       }
     };
-    expect(compileSessionRules(withoutDomains, { [groupKey]: [101] })).toEqual([]);
+
+    const rules = compileSessionRules(withoutDomains, { [groupKey]: [101] });
+
+    expect(rules).toHaveLength(2);
+    expect(rules[0].condition.tabIds).toEqual([101]);
+    expect(rules[0].condition.urlFilter).toBe("*");
+    expect(rules[0].condition.regexFilter).toBeUndefined();
+  });
+
+  it("does not compile group envs without resolved groups", () => {
+    const state = makeState();
     expect(compileSessionRules(state, { [groupKey]: [] })).toEqual([]);
+  });
+
+  it("compiles path-only filters when domain filters are empty", () => {
+    const state = makeState();
+    const env = Object.values(state.envs)[0];
+    const pathOnlyState: GlobalState = {
+      ...state,
+      envs: {
+        [env.id]: {
+          ...env,
+          filters: { domains: [], paths: ["/commerce/*"], excludedDomains: [] }
+        }
+      }
+    };
+
+    const rules = compileSessionRules(pathOnlyState, { [groupKey]: [101] });
+
+    expect(rules[0].condition.regexFilter).toBe("^https?://[^/]+/commerce/");
   });
 
   it("uses regex for wildcard domains to avoid matching root domain", () => {

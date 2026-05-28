@@ -1,7 +1,7 @@
 import type { EnvFilters } from "./env";
 
 export function envCanEnable(filters: EnvFilters): boolean {
-  return filters.domains.some((domain) => domain.trim());
+  return true;
 }
 
 export function matchFilters(url: string | undefined, filters: EnvFilters) {
@@ -29,7 +29,8 @@ export function matchFilters(url: string | undefined, filters: EnvFilters) {
   const hostname = parsed.hostname.toLowerCase();
   const pathname = parsed.pathname || "/";
   const excluded = filters.excludedDomains.some((domain) => domainMatches(hostname, domain));
-  const matchedDomain = filters.domains.some((domain) => domainMatches(hostname, domain));
+  const matchedDomain =
+    filters.domains.length === 0 || filters.domains.some((domain) => domainMatches(hostname, domain));
   const matchedPath =
     filters.paths.length === 0 || filters.paths.some((path) => pathMatches(pathname, path));
 

@@ -32,33 +32,44 @@ describe("env helpers", () => {
 
   it("creates env without default domain filter", () => {
     const env = createEnv({ name: "Checkout", hostname: "pre.example.com", now: 1 });
-    expect(env.enabled).toBe(false);
+    expect(env.enabled).toBe(true);
     expect(env.scope).toBe("group");
     expect(env.filters.domains).toEqual([]);
     expect(env.rules.headers).toEqual([]);
     expect(env.workspace).toEqual({ items: [], todos: [], notes: "" });
   });
 
-  it("creates env without hostname as disabled and without filters", () => {
+  it("creates env without hostname and without filters", () => {
     const env = createEnv({ name: "No Url", now: 1 });
-    expect(env.enabled).toBe(false);
+    expect(env.enabled).toBe(true);
     expect(env.filters.domains).toEqual([]);
   });
 
-  it("creates disabled env without hostname", () => {
+  it("creates enabled env without hostname", () => {
     const env = createEnv({ name: "No Host", now: 1 });
-    expect(env.enabled).toBe(false);
+    expect(env.enabled).toBe(true);
     expect(env.filters.domains).toEqual([]);
   });
 
-  it("keeps env disabled when domain filter is empty", () => {
+  it("keeps env enabled when domain filter is empty", () => {
     const env = createEnv({ name: "Checkout", hostname: "pre.example.com", now: 1 });
     const sanitized = sanitizeEnv({
       ...env,
       enabled: true,
       filters: { ...env.filters, domains: [] }
     });
-    expect(sanitized.enabled).toBe(false);
+    expect(sanitized.enabled).toBe(true);
+  });
+
+  it("migrates old disabled envs with empty domain filters to enabled", () => {
+    const env = createEnv({ name: "Checkout", now: 1 });
+    const sanitized = sanitizeEnv({
+      ...env,
+      enabled: false,
+      filters: { domains: [], paths: [], excludedDomains: [] }
+    });
+
+    expect(sanitized.enabled).toBe(true);
   });
 
   it("normalizes individual rules as enabled", () => {
@@ -79,6 +90,23 @@ describe("env helpers", () => {
   it("creates blank header and query rules by default", () => {
     expect(createHeaderRule()).toMatchObject({ enabled: true, name: "", value: "" });
     expect(createQueryRule()).toMatchObject({ enabled: true, key: "", value: "" });
+  });
+
+  it("keeps blank rule drafts so popup add buttons create editable rows", () => {
+    const env = createEnv({ name: "Checkout", now: 1 });
+    const sanitized = sanitizeEnv({
+      ...env,
+      filters: { ...env.filters, domains: ["example.com"] },
+      rules: {
+        headers: [createHeaderRule()],
+        queries: [createQueryRule()]
+      }
+    });
+
+    expect(sanitized.rules.headers).toHaveLength(1);
+    expect(sanitized.rules.queries).toHaveLength(1);
+    expect(sanitized.rules.headers[0]).toMatchObject({ enabled: true, name: "", value: "" });
+    expect(sanitized.rules.queries[0]).toMatchObject({ enabled: true, key: "", value: "" });
   });
 
   it("creates workspace items and todos with stable defaults", () => {

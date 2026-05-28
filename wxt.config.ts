@@ -4,8 +4,9 @@ export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   outDir: "output",
   manifest: {
-    name: "Browser Group Env",
-    description: "Bind Chrome Tab Groups to development environment rules.",
+    name: "__MSG_extName__",
+    description: "__MSG_extDescription__",
+    default_locale: "en",
     permissions: ["tabs", "tabGroups", "storage", "declarativeNetRequest", "scripting", "sidePanel"],
     host_permissions: ["<all_urls>"],
     icons: {
@@ -15,7 +16,7 @@ export default defineConfig({
       "128": "icon/128.png"
     },
     action: {
-      default_title: "Browser Group Env",
+      default_title: "__MSG_extName__",
       default_icon: {
         "16": "icon/16.png",
         "32": "icon/32.png",
