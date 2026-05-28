@@ -8,6 +8,66 @@ Chrome Web Store 的类别、商店详情页说明、截图、隐私说明和分
 - 语言：English、简体中文
 - 发布渠道：Chrome Web Store
 - 上传包：`output/browser-group-env-<version>-chrome.zip`
+- 隐私权政策网址：`https://github.com/YogaLin/browser-group-env/blob/main/docs/release/privacy-policy.md`
+
+## Privacy & Permissions
+
+Chrome Web Store 隐私页会读取 Manifest 中的权限并要求逐项填写用途。当前 Manifest 权限来自 `wxt.config.ts`：
+
+- `permissions`: `tabs`, `tabGroups`, `storage`, `declarativeNetRequest`, `scripting`, `sidePanel`
+- `host_permissions`: `<all_urls>`
+
+官方要求权限必须限制在当前功能需要的最小范围内；如果控制台出现未列在这里的权限，先回到 Manifest 移除或确认来源，再提交新包。
+
+### Single Purpose
+
+控制台填写值：
+
+Use this extension to bind Chrome Tab Groups to development environment rules, so request headers and query parameter replacements can be applied only to the browser context selected by the user.
+
+中文参考：
+
+使用此扩展将 Chrome 标签组绑定到开发环境规则，让请求头和查询参数替换只应用到用户选择的浏览器上下文。
+
+### Permission Justification
+
+#### `tabs`
+
+Needed to identify the active tab, read its URL and window, and resolve which tabs belong to a configured Tab Group. This is required to show the current environment context and to limit request rules to the intended tabs.
+
+#### `tabGroups`
+
+Needed to list Chrome Tab Groups, read their titles and colors, and bind environment configurations to specific groups. The extension uses Tab Groups as the main boundary for development environments.
+
+#### `storage`
+
+Needed to save environment configurations, group bindings, filters, request rules, templates, snippets, todos, and notes locally in Chrome storage. The extension does not require a remote account or backend service for these settings.
+
+#### `declarativeNetRequest`
+
+Needed to install Manifest V3 session rules that set request headers or replace query parameters for matching requests. This is the core mechanism used by the extension to apply environment rules.
+
+#### `scripting`
+
+Needed only when a user applies a template that reads a value from the current page with a CSS selector or XPath. The script reads the configured page value and copies it into the generated request header; it is not used for continuous page monitoring.
+
+#### `sidePanel`
+
+Needed to open the persistent side panel workspace for editing environment rules, snippets, todos, and notes without relying only on the popup window.
+
+#### `<all_urls>`
+
+Needed because users can configure environment rules for arbitrary development, staging, preview, or local websites. Host access allows Declarative Net Request rules to modify matching requests across those user-configured sites, and allows one-time template value reading on the source page when `scripting` is used.
+
+### Remote Code
+
+No remote code is executed. The extension package contains its own JavaScript, CSS, images, and localized text. It does not load executable code from remote servers at runtime.
+
+### Data Usage
+
+The extension stores configuration locally in `chrome.storage.local`, including environment names, filters, request headers, query replacement rules, template definitions, snippets, todos, and notes entered by the user.
+
+The extension reads active tab and Tab Group metadata to decide which environment is selected and which tabs should receive rules. It does not transmit browsing data, configuration, headers, notes, or workspace content to a remote server.
 
 ## Store Listing - English
 
