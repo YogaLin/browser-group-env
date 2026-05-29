@@ -8,6 +8,12 @@ It helps developers keep multiple tasks, branches, or preview environments separ
 
 ![Browser Group Env](./docs/assets/marquee-promo-1400x560.jpg)
 
+## Demo
+
+<video controls muted src="./docs/assets/browser-group-env-demo.mp4" title="Browser Group Env demo"></video>
+
+[Open the demo video](./docs/assets/browser-group-env-demo.mp4)
+
 ## Features
 
 - Create and edit environment configurations.

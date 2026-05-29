@@ -8,6 +8,12 @@ Browser Group Env 是一个 Chrome 扩展，用于把开发环境规则绑定到
 
 ![Browser Group Env](./docs/assets/marquee-promo-1400x560.jpg)
 
+## 演示
+
+<video controls muted src="./docs/assets/browser-group-env-demo.mp4" title="Browser Group Env 演示"></video>
+
+[打开演示视频](./docs/assets/browser-group-env-demo.mp4)
+
 ## 功能
 
 - 创建和编辑环境配置。
